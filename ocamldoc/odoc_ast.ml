@@ -65,13 +65,15 @@ module Typedtree_search =
 
     let add_to_hashes table table_values tt =
       match tt with
-      | Typedtree.Tstr_module mb ->
-          Hashtbl.add table (M (Name.from_ident mb.mb_id)) tt
+      | Typedtree.Tstr_module {mb_id=Some id} ->
+          Hashtbl.add table (M (Name.from_ident id)) tt
       | Typedtree.Tstr_recmodule mods ->
           List.iter
             (fun mb ->
-              Hashtbl.add table (M (Name.from_ident mb.mb_id))
-                (Typedtree.Tstr_module mb)
+               Misc.may (fun id ->
+                 Hashtbl.add table (M (Name.from_ident id))
+                 (Typedtree.Tstr_module mb))
+                 mb.mb_id
             )
             mods
       | Typedtree.Tstr_modtype mtd ->
@@ -112,6 +114,7 @@ module Typedtree_search =
             pat_exp_list
       | Typedtree.Tstr_primitive vd ->
           Hashtbl.add table (P (Name.from_ident vd.val_id)) tt
+      | Typedtree.Tstr_module {mb_id=None} -> ()
       | Typedtree.Tstr_open _ -> ()
       | Typedtree.Tstr_include _ -> ()
       | Typedtree.Tstr_eval _ -> ()
@@ -1421,7 +1424,10 @@ module Analyser =
           in
             (0, new_env, [ Element_exception new_ext ])
 
-      | Parsetree.Pstr_module {Parsetree.pmb_name=name; pmb_expr=module_expr} ->
+      | Parsetree.Pstr_module {Parsetree.pmb_name=None} ->
+          (0, env, [])
+
+      | Parsetree.Pstr_module {Parsetree.pmb_name=Some name; pmb_expr=module_expr} ->
           (
            (* of string * module_expr *)
            try
@@ -1469,26 +1475,30 @@ module Analyser =
           let new_env =
             List.fold_left
               (fun acc_env {Parsetree.pmb_name=name;pmb_expr=mod_exp} ->
-                let complete_name = Name.concat current_module_name name.txt in
-                let e = Odoc_env.add_module acc_env complete_name in
-                let tt_mod_exp =
-                  try Typedtree_search.search_module table name.txt
-                  with Not_found -> raise (Failure (Odoc_messages.module_not_found_in_typedtree complete_name))
-                in
-                let new_module = analyse_module
-                    e
-                    current_module_name
-                    name.txt
-                    None
-                    mod_exp
-                    tt_mod_exp
-                in
-                match new_module.m_type with
-                  Types.Mty_signature s ->
-                    Odoc_env.add_signature e new_module.m_name
-                      ~rel: (Name.simple new_module.m_name) s
-                  | _ ->
-                      e
+                 match name with
+                 | None -> acc_env
+                 | Some name ->
+                     let complete_name = Name.concat current_module_name name.txt in
+                     let e = Odoc_env.add_module acc_env complete_name in
+                     let tt_mod_exp =
+                       try Typedtree_search.search_module table name.txt
+                       with Not_found ->
+                         raise (Failure (Odoc_messages.module_not_found_in_typedtree complete_name))
+                     in
+                     let new_module = analyse_module
+                         e
+                         current_module_name
+                         name.txt
+                         None
+                         mod_exp
+                         tt_mod_exp
+                     in
+                     match new_module.m_type with
+                       Types.Mty_signature s ->
+                         Odoc_env.add_signature e new_module.m_name
+                           ~rel: (Name.simple new_module.m_name) s
+                       | _ ->
+                           e
               )
               env
               mods
@@ -1496,7 +1506,18 @@ module Analyser =
           let rec f ?(first=false) last_pos name_mod_exp_list =
             match name_mod_exp_list with
               [] -> []
-            | {Parsetree.pmb_name=name;pmb_expr=mod_exp} :: q ->
+            | {Parsetree.pmb_name=None;pmb_expr=mod_exp} :: q ->
+                let loc_start = mod_exp.Parsetree.pmod_loc.Location.loc_start.Lexing.pos_cnum in
+                let loc_end =  mod_exp.Parsetree.pmod_loc.Location.loc_end.Lexing.pos_cnum in
+                (* the comments for the first type was already retrieved *)
+                let _, ele_comments =
+                  if first then None, []
+                  else get_comments_in_module last_pos loc_start
+                in
+                let eles = f loc_end q in
+                ele_comments @ eles
+
+            | {Parsetree.pmb_name=Some name;pmb_expr=mod_exp} :: q ->
                 let complete_name = Name.concat current_module_name name.txt in
                 let loc_start = mod_exp.Parsetree.pmod_loc.Location.loc_start.Lexing.pos_cnum in
                 let loc_end =  mod_exp.Parsetree.pmod_loc.Location.loc_end.Lexing.pos_cnum in

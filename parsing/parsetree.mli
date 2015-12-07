@@ -814,7 +814,7 @@ and value_binding =
 
 and module_binding =
     {
-     pmb_name: string loc;
+     pmb_name: string loc option;
      pmb_expr: module_expr;
      pmb_attributes: attributes;
      pmb_loc: Location.t;

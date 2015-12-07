@@ -225,8 +225,8 @@ and structure_item_desc =
 
 and module_binding =
     {
-     mb_id: Ident.t;
-     mb_name: string loc;
+     mb_id: Ident.t option;
+     mb_name: string loc option;
      mb_expr: module_expr;
      mb_attributes: attribute list;
      mb_loc: Location.t;

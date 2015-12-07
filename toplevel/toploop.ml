@@ -127,7 +127,7 @@ let parse_mod_use_file name lb =
   [ Ptop_def
       [ Str.module_
           (Mb.mk
-             (Location.mknoloc modname)
+             (Some (Location.mknoloc modname))
              (Mod.structure items)
           )
        ]

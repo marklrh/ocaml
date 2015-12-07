@@ -127,6 +127,7 @@ let option i f ppf x =
 ;;
 
 let longident i ppf li = line i ppf "%a\n" fmt_longident li;;
+let ident i ppf id = line i ppf "%a\n" fmt_ident id;;
 let string i ppf s = line i ppf "\"%s\"\n" s;;
 let arg_label i ppf = function
   | Nolabel -> line i ppf "Nolabel\n"
@@ -665,7 +666,7 @@ and module_declaration i ppf md =
   module_type (i+1) ppf md.md_type;
 
 and module_binding i ppf x =
-  line i ppf "%a\n" fmt_ident x.mb_id;
+  option i ident ppf x.mb_id;
   attributes i ppf x.mb_attributes;
   module_expr (i+1) ppf x.mb_expr
 
@@ -776,7 +777,7 @@ and core_type_x_core_type_x_location i ppf (ct1, ct2, l) =
 and constructor_decl i ppf {cd_id; cd_name = _; cd_args; cd_res; cd_loc;
                             cd_attributes} =
   line i ppf "%a\n" fmt_location cd_loc;
-  line (i+1) ppf "%a\n" fmt_ident cd_id;
+  ident (i+1) ppf cd_id;
   attributes i ppf cd_attributes;
   constructor_arguments (i+1) ppf cd_args;
   option (i+1) core_type ppf cd_res

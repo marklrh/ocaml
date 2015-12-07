@@ -19,6 +19,8 @@ val try_finally : (unit -> 'a) -> (unit -> unit) -> 'a;;
 
 val map_end: ('a -> 'b) -> 'a list -> 'b list -> 'b list
         (* [map_end f l t] is [map f l @ t], just more efficient. *)
+val filter_map_end: ('a -> 'b option) -> 'a list -> 'b list -> 'b list
+        (* [filter_map_end f l t] is [filter_map f l @ t], just more efficient. *)
 val map_left_right: ('a -> 'b) -> 'a list -> 'b list
         (* Like [List.map], with guaranteed left-to-right evaluation order *)
 val for_all2: ('a -> 'b -> bool) -> 'a list -> 'b list -> bool

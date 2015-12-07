@@ -177,7 +177,7 @@ let module_binding sub mb =
   let loc = sub.location sub mb.mb_loc; in
   let attrs = sub.attributes sub mb.mb_attributes in
   Mb.mk ~loc ~attrs
-    (map_loc sub mb.mb_name)
+    (map_opt (map_loc sub) mb.mb_name)
     (sub.module_expr sub mb.mb_expr)
 
 let type_parameter sub (ct, v) = (sub.typ sub ct, v)

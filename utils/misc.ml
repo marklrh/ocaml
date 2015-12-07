@@ -32,6 +32,14 @@ let rec map_end f l1 l2 =
     [] -> l2
   | hd::tl -> f hd :: map_end f tl l2
 
+let rec filter_map_end f l1 l2 =
+  match l1 with
+  | [] -> l2
+  | hd::tl ->
+      match f hd with
+      | None -> filter_map_end f tl l2
+      | Some hd -> hd :: filter_map_end f tl l2
+
 let rec map_left_right f = function
     [] -> []
   | hd::tl -> let res = f hd in res :: map_left_right f tl

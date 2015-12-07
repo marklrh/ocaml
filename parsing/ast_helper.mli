@@ -287,7 +287,7 @@ module Mtd:
 module Mb:
   sig
     val mk: ?loc:loc -> ?attrs:attrs -> ?docs:docs -> ?text:text ->
-      str -> module_expr -> module_binding
+      str option -> module_expr -> module_binding
   end
 
 (* Opens *)

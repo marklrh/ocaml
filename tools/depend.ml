@@ -37,6 +37,14 @@ let add bv lid =
 
 let addmodule bv lid = add_path bv lid.txt
 
+let bind_variable x bv =
+  StringSet.add x.txt bv
+
+let bind_variable_opt xo bv =
+  match xo with
+  | None -> bv
+  | Some x -> bind_variable x bv
+
 let rec add_type bv ty =
   match ty.ptyp_desc with
     Ptyp_any -> ()
@@ -141,7 +149,7 @@ let rec add_pattern bv pat =
   | Ppat_variant(_, op) -> add_opt add_pattern bv op
   | Ppat_type li -> add bv li
   | Ppat_lazy p -> add_pattern bv p
-  | Ppat_unpack id -> pattern_bv := StringSet.add id.txt !pattern_bv
+  | Ppat_unpack id -> pattern_bv := bind_variable id !pattern_bv
   | Ppat_exception p -> add_pattern bv p
   | Ppat_extension _ -> ()
 
@@ -191,7 +199,7 @@ let rec add_expr bv exp =
   | Pexp_setinstvar(_v, e) -> add_expr bv e
   | Pexp_override sel -> List.iter (fun (_s, e) -> add_expr bv e) sel
   | Pexp_letmodule(id, m, e) ->
-      add_module bv m; add_expr (StringSet.add id.txt bv) e
+      add_module bv m; add_expr (bind_variable id bv) e
   | Pexp_assert (e) -> add_expr bv e
   | Pexp_lazy (e) -> add_expr bv e
   | Pexp_poly (e, t) -> add_expr bv e; add_opt add_type bv t
@@ -230,7 +238,7 @@ and add_modtype bv mty =
   | Pmty_signature s -> add_signature bv s
   | Pmty_functor(id, mty1, mty2) ->
       Misc.may (add_modtype bv) mty1;
-      add_modtype (StringSet.add id.txt bv) mty2
+      add_modtype (bind_variable id bv) mty2
   | Pmty_with(mty, cstrl) ->
       add_modtype bv mty;
       List.iter
@@ -259,11 +267,11 @@ and add_sig_item bv item =
   | Psig_exception pext ->
       add_extension_constructor bv pext; bv
   | Psig_module pmd ->
-      add_modtype bv pmd.pmd_type; StringSet.add pmd.pmd_name.txt bv
+      add_modtype bv pmd.pmd_type; bind_variable pmd.pmd_name bv
   | Psig_recmodule decls ->
       let bv' =
-        List.fold_right StringSet.add
-                        (List.map (fun pmd -> pmd.pmd_name.txt) decls) bv
+        List.fold_right bind_variable
+          (List.map (fun pmd -> pmd.pmd_name) decls) bv
       in
       List.iter (fun pmd -> add_modtype bv' pmd.pmd_type) decls;
       bv'
@@ -290,7 +298,7 @@ and add_module bv modl =
   | Pmod_structure s -> ignore (add_structure bv s)
   | Pmod_functor(id, mty, modl) ->
       Misc.may (add_modtype bv) mty;
-      add_module (StringSet.add id.txt bv) modl
+      add_module (bind_variable id bv) modl
   | Pmod_apply(mod1, mod2) ->
       add_module bv mod1; add_module bv mod2
   | Pmod_constraint(modl, mty) ->
@@ -319,11 +327,13 @@ and add_struct_item bv item =
   | Pstr_exception pext ->
       add_extension_constructor bv pext; bv
   | Pstr_module x ->
-      add_module bv x.pmb_expr; StringSet.add x.pmb_name.txt bv
+      add_module bv x.pmb_expr;
+      bind_variable_opt x.pmb_name bv
   | Pstr_recmodule bindings ->
       let bv' =
-        List.fold_right StringSet.add
-          (List.map (fun x -> x.pmb_name.txt) bindings) bv in
+        List.fold_right bind_variable_opt
+          (List.map (fun x -> x.pmb_name) bindings) bv
+      in
       List.iter
         (fun x -> add_module bv' x.pmb_expr)
         bindings;

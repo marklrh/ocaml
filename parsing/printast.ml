@@ -803,7 +803,7 @@ and module_declaration i ppf pmd =
   module_type (i+1) ppf pmd.pmd_type;
 
 and module_binding i ppf x =
-  string_loc i ppf x.pmb_name;
+  option i string_loc ppf x.pmb_name;
   attributes i ppf x.pmb_attributes;
   module_expr (i+1) ppf x.pmb_expr
 

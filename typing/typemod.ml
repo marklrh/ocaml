@@ -288,6 +288,14 @@ let map_rec fn decls rem =
   | [] -> rem
   | d1 :: dl -> fn Trec_first d1 :: map_end (fn Trec_next) dl rem
 
+let rec filter_map_rec fn decls rem =
+  match decls with
+  | [] -> rem
+  | d1 :: dl ->
+      match fn Trec_first d1 with
+      | None -> filter_map_rec fn dl rem
+      | Some sg -> sg :: filter_map_end (fn Trec_next) dl rem
+
 let map_rec_type ~rec_flag fn decls rem =
   match decls with
   | [] -> rem
@@ -932,10 +940,13 @@ let check_recmodule_inclusion env bindings =
     if n > 0 then begin
       (* Generate fresh names Y_i for the rec. bound module idents X_i *)
       let bindings1 =
-        List.map
+        Misc.filter_map
           (fun (id, _, mty_decl, modl, mty_actual, _attrs, _loc) ->
-             (id, Ident.rename id, mty_actual))
-          bindings in
+             match id with
+             | None -> None
+             | Some id -> Some (id, Ident.rename id, mty_actual))
+          bindings
+      in
       (* Enter the Y_i in the environment with their actual types substituted
          by the input substitution s *)
       let env' =
@@ -945,8 +956,9 @@ let check_recmodule_inclusion env bindings =
                if first_time
                then mty_actual
                else subst_and_strengthen env s id mty_actual in
-             Env.add_module ~arg:false id' mty_actual' env)
-          env bindings1 in
+               Env.add_module ~arg:false id' mty_actual' env)
+          env bindings1
+      in
       (* Build the output substitution Y_i <- X_i *)
       let s' =
         List.fold_left
@@ -960,7 +972,11 @@ let check_recmodule_inclusion env bindings =
          and insert coercion if needed *)
       let check_inclusion (id, id_loc, mty_decl, modl, mty_actual, attrs, loc) =
         let mty_decl' = Subst.modtype s mty_decl.mty_type
-        and mty_actual' = subst_and_strengthen env s id mty_actual in
+        and mty_actual' =
+          match id with
+          | None -> Subst.modtype s mty_actual
+          | Some id -> subst_and_strengthen env s id mty_actual
+        in
         let coercion =
           try
             Includemod.modtypes env mty_actual' mty_decl'
@@ -973,7 +989,8 @@ let check_recmodule_inclusion env bindings =
               mod_env = env;
               mod_loc = modl.mod_loc;
               mod_attributes = [];
-             } in
+             }
+        in
         {
          mb_id = id;
          mb_name = id_loc;
@@ -1262,9 +1279,23 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         Tstr_exception ext,
         [Sig_typext(ext.ext_id, ext.ext_type, Text_exception)],
         newenv
-    | Pstr_module {pmb_name = name; pmb_expr = smodl; pmb_attributes = attrs;
-                   pmb_loc;
-                  } ->
+    | Pstr_module { pmb_name = None;
+                    pmb_expr = smodl;
+                    pmb_attributes = attrs;
+                    pmb_loc; } ->
+        let modl =
+          Typetexp.with_warning_attribute attrs (fun () ->
+            type_module ~alias:true true funct_body
+              None env smodl)
+        in
+        Tstr_module {mb_id=None; mb_name=None; mb_expr=modl;
+                     mb_attributes=attrs;  mb_loc=pmb_loc;
+                    },
+        [], env
+    | Pstr_module { pmb_name = Some name;
+                    pmb_expr = smodl;
+                    pmb_attributes = attrs;
+                    pmb_loc; } ->
         check_name check_module names name;
         let id = Ident.create name.txt in (* create early for PR#6752 *)
         let modl =
@@ -1279,7 +1310,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           }
         in
         let newenv = Env.enter_module_declaration id md env in
-        Tstr_module {mb_id=id; mb_name=name; mb_expr=modl;
+        Tstr_module {mb_id=Some id; mb_name=Some name; mb_expr=modl;
                      mb_attributes=attrs;  mb_loc=pmb_loc;
                     },
         [Sig_module(id,
@@ -1305,27 +1336,48 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
             sbind
         in
         List.iter
-          (fun (name, _, _, _, _) -> check_name check_module names name)
+          (fun (name, _, _, _, _) ->
+             match name with
+             | Some name -> check_name check_module names name
+             | None -> ())
           sbind;
         let (decls, newenv) =
           transl_recmodule_modtypes loc env
-            (List.map (fun (name, smty, smodl, attrs, loc) ->
-                 {pmd_name=name; pmd_type=smty;
-                  pmd_attributes=attrs; pmd_loc=loc}) sbind
-            ) in
+            (List.map
+               (fun (name, smty, smodl, attrs, loc) ->
+                  match name with
+                  | Some name ->
+                      {pmd_name=name; pmd_type=smty;
+                            pmd_attributes=attrs; pmd_loc=loc}
+                  | None ->
+                      {pmd_name=Location.mknoloc "_"; pmd_type=smty;
+                            pmd_attributes=attrs; pmd_loc=loc})
+               sbind)
+        in
         let bindings1 =
           List.map2
             (fun {md_id=id; md_type=mty} (name, _, smodl, attrs, loc) ->
-               let modl =
-                 Typetexp.with_warning_attribute attrs (fun () ->
-                   type_module true funct_body (anchor_recmodule id anchor)
-                               newenv smodl)
-               in
-               let mty' =
-                 enrich_module_type anchor (Ident.name id) modl.mod_type newenv
-               in
-               (id, name, mty, modl, mty', attrs, loc))
-            decls sbind in
+               match name with
+               | None ->
+                   let modl =
+                     Typetexp.with_warning_attribute attrs (fun () ->
+                       type_module true funct_body
+                         None newenv smodl)
+                   in
+                     (None, None, mty, modl, modl.mod_type, attrs, loc)
+               | Some name ->
+                   let modl =
+                     Typetexp.with_warning_attribute attrs (fun () ->
+                       type_module true funct_body
+                         (anchor_recmodule id anchor) newenv smodl)
+                   in
+                   let mty' =
+                     enrich_module_type anchor
+                       (Ident.name id) modl.mod_type newenv
+                   in
+                     (Some id, Some name, mty, modl, mty', attrs, loc))
+            decls sbind
+        in
         let newenv = (* allow aliasing recursive modules from outside *)
           List.fold_left
             (fun env md ->
@@ -1336,20 +1388,24 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                    md_loc = md.md_loc;
                  }
                in
-               Env.add_module_declaration md.md_id mdecl env
+                 Env.add_module_declaration md.md_id mdecl env
             )
             env decls
         in
         let bindings2 =
-          check_recmodule_inclusion newenv bindings1 in
+          check_recmodule_inclusion newenv bindings1
+        in
         Tstr_recmodule bindings2,
-        map_rec (fun rs mb ->
-            Sig_module(mb.mb_id, {
-                md_type=mb.mb_expr.mod_type;
-                md_attributes=mb.mb_attributes;
-                md_loc=mb.mb_loc;
-              }, rs))
-           bindings2 [],
+        filter_map_rec (fun rs mb ->
+            match mb.mb_id with
+            | Some id ->
+                Some (Sig_module(id, {
+                  md_type=mb.mb_expr.mod_type;
+                  md_attributes=mb.mb_attributes;
+                  md_loc=mb.mb_loc;
+                }, rs))
+            | None -> None)
+          bindings2 [],
         newenv
     | Pstr_modtype pmtd ->
         (* check that it is non-abstract *)

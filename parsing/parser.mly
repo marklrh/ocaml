@@ -792,6 +792,10 @@ str_include_statement:
       { Incl.mk $2 ~attrs:$3
                 ~loc:(symbol_rloc()) ~docs:(symbol_docs ()) }
 ;
+module_binding_name:
+    UIDENT     { Some (mkrhs $1 1) }
+  | UNDERSCORE { None }
+;
 module_binding_body:
     EQUAL module_expr
       { $2 }
@@ -801,8 +805,8 @@ module_binding_body:
       { mkmod(Pmod_functor(fst $1, snd $1, $2)) }
 ;
 module_binding:
-    MODULE UIDENT module_binding_body post_item_attributes
-      { Mb.mk (mkrhs $2 2) $3 ~attrs:$4
+    MODULE module_binding_name module_binding_body post_item_attributes
+      { Mb.mk $2 $3 ~attrs:$4
               ~loc:(symbol_rloc ()) ~docs:(symbol_docs ()) }
 ;
 rec_module_bindings:
@@ -810,13 +814,13 @@ rec_module_bindings:
   | rec_module_bindings and_module_binding        { $2 :: $1 }
 ;
 rec_module_binding:
-    MODULE REC UIDENT module_binding_body post_item_attributes
-      { Mb.mk (mkrhs $3 3) $4 ~attrs:$5
+    MODULE REC module_binding_name module_binding_body post_item_attributes
+      { Mb.mk $3 $4 ~attrs:$5
               ~loc:(symbol_rloc ()) ~docs:(symbol_docs ()) }
 ;
 and_module_binding:
-    AND UIDENT module_binding_body post_item_attributes
-      { Mb.mk (mkrhs $2 2) $3 ~attrs:$4 ~loc:(symbol_rloc ())
+    AND module_binding_name module_binding_body post_item_attributes
+      { Mb.mk $2 $3 ~attrs:$4 ~loc:(symbol_rloc ())
                ~text:(symbol_text ()) ~docs:(symbol_docs ()) }
 ;
 
