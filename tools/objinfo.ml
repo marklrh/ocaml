@@ -120,7 +120,10 @@ let print_cmx_infos (ui, crc) =
     (Linkage_name.create "__dummy__") in
   Compilation_unit.set_current cu;
   printf "Implementation exported:\n";
-  Format.eprintf "%a" Export_info.print_all ui.ui_export_info;
+  begin match ui.ui_export_info with
+  | Clambda approx -> Format.printf " %a\n" Printclambda.approx approx
+  | Flambda export -> Format.printf " %a\n" Export_info.print_all export
+  end;
   let pr_funs _ fns =
     List.iter (fun arity -> printf " %d" arity) fns in
   printf "Currying functions:%a\n" pr_funs ui.ui_curry_fun;
