@@ -33,7 +33,8 @@ Gc.full_major ();;
 
 let size = 1_000_000;;
 
-let check o =
+let check weak idx =
+  let o = Weak.get weak idx in
   printf "checking...";
   match o with
   | None -> printf " no value\n";
@@ -45,14 +46,18 @@ let check o =
      printf " ok\n";
 ;;
 
-(* With flambda, the [Some ...] will be lifted to an
-   [Initialize_symbol], meaning that it will never be
-   collected.  As such, we expect the weak reference
-   to continue holding [Some]. *)
-Weak.set !smuggle 0 (Some (String.make size ' '));;
+let create () =
+  Weak.set !smuggle 0 (Some (String.make size ' '));;
+
+(* Use [opaque] to ensure that the string will not be lifted to a
+   symbol and prevented from being collected. *)
+let create = opaque create;;
+let check = opaque check;;
+
+create ();;
 
 (* Check the data just to make sure. *)
-check (Weak.get !smuggle 0);;
+check !smuggle 0;;
 
 (* Get a dangling pointer in W. *)
 Gc.full_major ();;
@@ -63,4 +68,4 @@ let r = fill ((Gc.stat ()).Gc.heap_words / 3) [];;
 Gc.minor ();;
 
 (* Now follow the dangling pointer and exhibit the problem. *)
-check (Weak.get !smuggle 0);;
+check !smuggle 0;;
