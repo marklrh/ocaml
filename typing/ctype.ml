@@ -2193,6 +2193,7 @@ let eq_package_path env p1 p2 =
   Path.same (normalize_package_path env p1) (normalize_package_path env p2)
 
 let nondep_type' = ref (fun _ _ _ -> assert false)
+(* filled with typemod.package_subtype *)
 let package_subtype = ref (fun _ _ _ _ _ _ _ -> assert false)
 
 let rec concat_longident lid1 =
@@ -2241,13 +2242,17 @@ let complete_type_list ?(allow_absent=false) env nl1 lv2 mty2 nl2 tl2 =
   complete nl1 (List.combine nl2 tl2)
 
 (* raise Not_found rather than Unify if the module types are incompatible *)
+(* objmagic: Not_found is not good enough *)
 let unify_package env unify_list lv1 p1 n1 tl1 lv2 p2 n2 tl2 =
   let ntl2 = complete_type_list env n1 lv2 (Mty_ident p2) n2 tl2
   and ntl1 = complete_type_list env n2 lv1 (Mty_ident p1) n1 tl1 in
   unify_list (List.map snd ntl1) (List.map snd ntl2);
-  if eq_package_path env p1 p2
-  || !package_subtype env p1 n1 tl1 p2 n2 tl2
-  && !package_subtype env p2 n2 tl2 p1 n1 tl1 then () else raise Not_found
+  Format.printf "Calling package_subtype at %s@." __LOC__;
+  try
+    if eq_package_path env p1 p2
+    || !package_subtype env p1 n1 tl1 p2 n2 tl2
+    && !package_subtype env p2 n2 tl2 p1 n1 tl1 then () else raise Not_found
+  with Includemod.Error _ as e -> raise e
 
 
 let unify_eq t1 t2 =
@@ -3183,7 +3188,7 @@ let rec eqtype rename type_pairs subst env t1 t2 =
               begin try
                 normalize_subst subst;
                 if List.assq t1' !subst != t2' then raise (Unify [])
-              with Not_found ->
+              with Not_found | Includemod.Error _ ->
                 if List.exists (fun (_, t) -> t == t2') !subst
                 then raise (Unify []);
                 subst := (t1', t2') :: !subst
@@ -3201,7 +3206,7 @@ let rec eqtype rename type_pairs subst env t1 t2 =
               begin try
                 unify_package env (eqtype_list rename type_pairs subst env)
                   t1'.level p1 n1 tl1 t2'.level p2 n2 tl2
-              with Not_found -> raise (Unify [])
+              with Not_found | Includemod.Error _ -> raise (Unify [])
               end
           | (Tvariant row1, Tvariant row2) ->
               eqtype_row rename type_pairs subst env row1 row2
@@ -3946,10 +3951,13 @@ let rec subtype_rec env trace t1 t2 cstrs =
             let snap = Btype.snapshot () in
             try
               List.iter (fun (_, t1, t2, _) -> unify env t1 t2) cstrs';
-              if !package_subtype env p1 nl1 tl1 p2 nl2 tl2
-              then (Btype.backtrack snap; cstrs' @ cstrs)
-              else raise (Unify [])
-            with Unify _ ->
+              Format.printf "Calling package_subtype at %s@." __LOC__;
+              try
+                if !package_subtype env p1 nl1 tl1 p2 nl2 tl2
+                then (Btype.backtrack snap; cstrs' @ cstrs)
+                else raise (Unify [])
+              with Includemod.Error _ -> raise (Unify [])
+            with Unify _  ->
               Btype.backtrack snap; raise Not_found
           end
         with Not_found ->
@@ -4042,9 +4050,12 @@ let subtype env ty1 ty2 =
   function () ->
     List.iter
       (function (trace0, t1, t2, pairs) ->
-         try unify_pairs (ref env) t1 t2 pairs with Unify trace ->
-           raise (Subtype (expand_trace env (List.rev trace0),
-                           List.tl (List.tl trace))))
+        try unify_pairs (ref env) t1 t2 pairs
+        with
+        | Unify trace ->
+                   raise (Subtype (expand_trace env (List.rev trace0),
+                    List.tl (List.tl trace)))
+        | Includemod.Error _ as e -> raise e)
       (List.rev cstrs)
 
                               (*******************)

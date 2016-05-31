@@ -21,13 +21,13 @@ open Typedtree
 open Types
 
 type symptom =
-    Missing_field of Ident.t * Location.t * string (* kind *)
+    Missing_field of Ident.t * Location.t * string (* kind *) (* objmagic: we want this error *)
   | Value_descriptions of Ident.t * value_description * value_description
   | Type_declarations of Ident.t * type_declaration
         * type_declaration * Includecore.type_mismatch list
   | Extension_constructors of
       Ident.t * extension_constructor * extension_constructor
-  | Module_types of module_type * module_type
+  | Module_types of module_type * module_type (* objmagic *)
   | Modtype_infos of Ident.t * modtype_declaration * modtype_declaration
   | Modtype_permutation
   | Interface_mismatch of string * string
@@ -265,8 +265,9 @@ and try_modtypes env cxt subst mty1 mty2 =
           (Tcoerce_none, Tcoerce_none) -> Tcoerce_none
         | _ -> Tcoerce_functor(cc_arg, cc_res)
       end
-  | (_, _) ->
-      raise Dont_match
+  | (_, _) ->(
+      (Format.printf "don't match!");
+      raise Dont_match)
 
 and try_modtypes2 env cxt mty1 mty2 =
   (* mty2 is an identifier *)

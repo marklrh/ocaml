@@ -49,6 +49,7 @@ type error =
   | Unbound_instance_variable of string * string list
   | Instance_variable_not_mutable of bool * string
   | Not_subtype of (type_expr * type_expr) list * (type_expr * type_expr) list
+  | Not_subtype_package of Includemod.error list
   | Outside_class
   | Value_multiply_overridden of string
   | Coercion_failure of
@@ -2480,9 +2481,13 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                   if not gen && !Clflags.principal then
                     Location.prerr_warning loc
                       (Warnings.Not_principal "this ground coercion");
-                with Subtype (tr1, tr2) ->
-                  (* prerr_endline "coercion failed"; *)
+                with
+                | Subtype (tr1, tr2) ->
+                (* objmagic *)
+                (* prerr_endline "coercion failed"; *)
                   raise(Error(loc, env, Not_subtype(tr1, tr2)))
+                | Includemod.Error el ->
+                  raise(Error(loc, env, Not_subtype_package el))
                 end;
             | _ ->
                 let ty, b = enlarge_type env ty' in
@@ -2505,8 +2510,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             begin try
               let force'' = subtype env ty ty' in
               force (); force' (); force'' ()
-            with Subtype (tr1, tr2) ->
+            with
+            | Subtype (tr1, tr2) ->
               raise(Error(loc, env, Not_subtype(tr1, tr2)))
+            | Includemod.Error el ->
+              raise(Error(loc, env, Not_subtype_package el))
             end;
             if separate then begin
               end_def ();
@@ -4241,8 +4249,10 @@ let report_error env ppf = function
         fprintf ppf "The instance variable %s is not mutable" v
       else
         fprintf ppf "The value %s is not an instance variable" v
-  | Not_subtype(tr1, tr2) ->
+  | Not_subtype (tr1, tr2) ->
       report_subtyping_error ppf env tr1 "is not a subtype of" tr2
+  | Not_subtype_package el ->
+      Includemod.report_error ppf el
   | Outside_class ->
       fprintf ppf "This object duplication occurs outside a method definition"
   | Value_multiply_overridden v ->

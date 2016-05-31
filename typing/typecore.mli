@@ -94,6 +94,7 @@ type error =
   | Unbound_instance_variable of string * string list
   | Instance_variable_not_mutable of bool * string
   | Not_subtype of (type_expr * type_expr) list * (type_expr * type_expr) list
+  | Not_subtype_package of Includemod.error list
   | Outside_class
   | Value_multiply_overridden of string
   | Coercion_failure of
