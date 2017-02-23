@@ -4113,6 +4113,25 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
               type_expect exp_env sexp pat.pat_type))
       spat_sexp_list pat_slot_list in
   current_slot := None;
+  (* objmagic: need to dump out pat_slot_list here *)
+  (* ignore (pat_slot_list:
+     (Typedtree.pattern * (string * Types.value_description)
+     list ref option) list ); *)
+  List.iter (fun (pat, slot) ->
+    Format.fprintf Format.std_formatter "%s %a@." "printing pattern:"
+    Parmatch.top_pretty pat;
+    flush_all();
+    Format.fprintf Format.std_formatter "%s@." "Start printing slot";
+    (match slot with
+    | None -> Format.fprintf Format.std_formatter "%s@." "None";
+    | Some slot ->
+        List.iter (fun (name, vd) ->
+          Printtyp.value_description (Ident.create name) Format.str_formatter vd;
+          prerr_string (Format.flush_str_formatter ());
+          Format.print_newline ();
+          flush_all()) !slot);
+    Format.fprintf Format.std_formatter "@.%s@." "Done printing slot")
+    pat_slot_list;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
     let {pvb_pat; pvb_attributes} = List.hd spat_sexp_list in
@@ -4122,6 +4141,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
          Location.prerr_warning pvb_pat.ppat_loc Warnings.Unused_rec_flag
       )
   end;
+  (* objmagic: should start working on here *)
   List.iter2
     (fun pat exp ->
       ignore(check_partial env pat.pat_type pat.pat_loc [case pat exp]))
