@@ -342,7 +342,7 @@ and expression_desc =
 
            (module ME : S) is represented as
            Pexp_constraint(Pexp_pack, Ptyp_package S) *)
-  | Pexp_open of override_flag * Longident.t loc * expression
+  | Pexp_open of override_flag * module_expr * expression
         (* M.(E)
            let open M in E
            let! open M in E *)
@@ -727,7 +727,7 @@ and module_type_declaration =
 
 and open_description =
     {
-     popen_lid: Longident.t loc;
+     popen_expr: module_expr;
      popen_override: override_flag;
      popen_loc: Location.t;
      popen_attributes: attributes;

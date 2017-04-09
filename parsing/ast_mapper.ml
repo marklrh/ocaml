@@ -387,8 +387,8 @@ module E = struct
     | Pexp_newtype (s, e) ->
         newtype ~loc ~attrs (map_loc sub s) (sub.expr sub e)
     | Pexp_pack me -> pack ~loc ~attrs (sub.module_expr sub me)
-    | Pexp_open (ovf, lid, e) ->
-        open_ ~loc ~attrs ovf (map_loc sub lid) (sub.expr sub e)
+    | Pexp_open (ovf, me, e) ->
+        open_ ~loc ~attrs ovf (sub.module_expr sub me) (sub.expr sub e)
     | Pexp_extension x -> extension ~loc ~attrs (sub.extension sub x)
     | Pexp_unreachable -> unreachable ~loc ~attrs ()
 end
@@ -561,8 +561,8 @@ let default_mapper =
 
 
     open_description =
-      (fun this {popen_lid; popen_override; popen_attributes; popen_loc} ->
-         Opn.mk (map_loc this popen_lid)
+      (fun this {popen_expr; popen_override; popen_attributes; popen_loc} ->
+         Opn.mk (this.module_expr this popen_expr)
            ~override:popen_override
            ~loc:(this.location this popen_loc)
            ~attrs:(this.attributes this popen_attributes)
