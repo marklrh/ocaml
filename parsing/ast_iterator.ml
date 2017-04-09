@@ -365,8 +365,8 @@ module E = struct
     | Pexp_object cls -> sub.class_structure sub cls
     | Pexp_newtype (_s, e) -> sub.expr sub e
     | Pexp_pack me -> sub.module_expr sub me
-    | Pexp_open (_ovf, me, e) ->
-        sub.module_expr sub me; sub.expr sub e
+    | Pexp_open (_ovf, lid, e) ->
+        iter_loc sub lid; sub.expr sub e
     | Pexp_extension x -> sub.extension sub x
     | Pexp_unreachable -> ()
 end
