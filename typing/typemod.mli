@@ -37,7 +37,7 @@ val check_nongen_schemes:
         Env.t -> Types.signature -> unit
 val type_open_:
         ?toplevel:bool -> Asttypes.override_flag ->
-        Env.t -> Location.t -> Longident.t Asttypes.loc -> Path.t * Env.t
+        Env.t -> Location.t -> 'a -> Path.t * Env.t
 val modtype_of_package:
         Env.t -> Location.t ->
         Path.t -> Longident.t list -> type_expr list -> module_type

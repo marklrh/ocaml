@@ -135,7 +135,7 @@ let open_description sub od =
   let attrs = sub.attributes sub od.open_attributes in
   Opn.mk ~loc ~attrs
     ~override:od.open_override
-    (map_loc sub od.open_txt)
+    (sub.module_expr sub od.open_expr)
 
 let structure_item sub item =
   let loc = sub.location sub item.str_loc in

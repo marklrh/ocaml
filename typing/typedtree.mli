@@ -451,7 +451,7 @@ and module_type_declaration =
 and open_description =
     {
      open_path: Path.t;
-     open_txt: Longident.t loc;
+     open_expr: module_expr;
      open_override: override_flag;
      open_loc: Location.t;
      open_attributes: attribute list;

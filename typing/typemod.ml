@@ -82,24 +82,31 @@ let extract_sig_open env loc mty =
 
 (* Compute the environment after opening a module *)
 
-let type_open_ ?toplevel ovf env loc lid =
+let type_module_fwd : (Env.t -> Parsetree.module_expr ->
+                       Typedtree.module_expr) ref =
+  ref (fun _ _ -> assert false)
+
+(* let type_open_ ?toplevel ovf env loc me = *)
+let type_open_ ?toplevel ovf env loc (me: Parsetree.module_expr) =
+  assert false (*
   let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
   match Env.open_signature ~loc ?toplevel ovf path env with
-  | Some env -> path, env
+  | Some env -> path, env, assert false
   | None ->
       let md = Env.find_module path env in
       ignore (extract_sig_open env lid.loc md.md_type);
-      assert false
+      assert false *)
+
 
 let type_open ?toplevel env sod =
-  let (path, newenv) =
-    type_open_ ?toplevel sod.popen_override env sod.popen_loc sod.popen_lid
+  let (path, newenv, tme) =
+    type_open_ ?toplevel sod.popen_override env sod.popen_loc sod.popen_expr
   in
   let od =
     {
       open_override = sod.popen_override;
       open_path = path;
-      open_txt = sod.popen_lid;
+      open_expr = tme;
       open_attributes = sod.popen_attributes;
       open_loc = sod.popen_loc;
     }
@@ -1586,6 +1593,7 @@ let () =
   Typetexp.transl_modtype := transl_modtype;
   Typecore.type_open := type_open_ ?toplevel:None;
   Typecore.type_package := type_package;
+  type_module_fwd := type_module;
   type_module_type_of_fwd := type_module_type_of
 
 
