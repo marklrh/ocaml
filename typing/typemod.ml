@@ -86,32 +86,84 @@ let type_module_fwd : (Env.t -> Parsetree.module_expr ->
                        Typedtree.module_expr) ref =
   ref (fun _ _ -> assert false)
 
-(* let type_open_ ?toplevel ovf env loc me = *)
-let type_open_ ?toplevel ovf env loc (me: Parsetree.module_expr) =
-  assert false (*
-  let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
-  match Env.open_signature ~loc ?toplevel ovf path env with
-  | Some env -> path, env, assert false
-  | None ->
-      let md = Env.find_module path env in
-      ignore (extract_sig_open env lid.loc md.md_type);
-      assert false *)
+let gm = ref None
 
+let type_open_ ?toplevel ovf env loc (me: Parsetree.module_expr) =
+  match me.pmod_desc with
+  | Pmod_ident lid -> begin
+      let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
+      match Env.open_signature ~loc ?toplevel ovf path env with
+      | Some env ->
+          let tme =
+            {
+              mod_desc=Tmod_ident (path, lid);
+              mod_loc=lid.loc;
+              mod_type=Mty_ident path;
+              mod_env=env;
+              mod_attributes=me.pmod_attributes
+            } in
+          tme, env
+      | None ->
+          let md = Env.find_module path env in
+          ignore (extract_sig_open env lid.loc md.md_type);
+          assert false
+    end
+  | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ -> assert false
+  | Pmod_structure _ -> begin
+      let param = Ident.create "M" in
+      gm := Some param;
+      let fake_root = Pident param in
+      let tme = !type_module_fwd env me in
+      Format.eprintf "%a@." Printtyp.modtype tme.mod_type;
+      let md = {
+        md_type = tme.mod_type;
+        md_loc = me.pmod_loc;
+        md_attributes = me.pmod_attributes;
+      } in
+      let newenv = Env.enter_module_declaration param md env in
+      match Env.open_signature ~loc ?toplevel ovf fake_root newenv with
+      | None -> assert false
+      | Some opened_env -> tme, opened_env
+    end
+  | _ -> begin
+      (* Pmod_apply -> iirc functor application happens at runtime.
+                       what shall we do here?
+         Pmod_constraint *)
+      assert false
+    end
+
+let extract_open_struct = function
+  | Tstr_open od -> begin
+      match od.open_expr.mod_desc with
+      | Tmod_ident (_, _) -> None
+      | Tmod_structure _ ->
+          let id = match !gm with
+            | None -> assert false
+            | Some d -> d in
+          let tm =
+            Tstr_module {mb_id=id;
+                         mb_name={txt="M"; loc=Location.none};
+                         mb_expr = od.open_expr;
+                         mb_attributes=od.open_expr.mod_attributes;
+                         mb_loc=od.open_expr.mod_loc} in
+          Some tm
+      | _ -> assert false
+    end
+  | _ -> None
 
 let type_open ?toplevel env sod =
-  let (path, newenv, tme) =
+  let (tme, newenv) =
     type_open_ ?toplevel sod.popen_override env sod.popen_loc sod.popen_expr
   in
   let od =
     {
       open_override = sod.popen_override;
-      open_path = path;
       open_expr = tme;
       open_attributes = sod.popen_attributes;
       open_loc = sod.popen_loc;
     }
   in
-  (path, newenv, od)
+  newenv, od
 
 (* Record a module type *)
 let rm node =
@@ -404,7 +456,7 @@ and approx_sig env ssg =
           let (id, newenv) = Env.enter_modtype d.pmtd_name.txt info env in
           Sig_modtype(id, info) :: approx_sig newenv srem
       | Psig_open sod ->
-          let (_path, mty, _od) = type_open env sod in
+          let (mty, _od) = type_open env sod in
           approx_sig mty srem
       | Psig_include sincl ->
           let smty = sincl.pincl_mod in
@@ -680,7 +732,7 @@ and transl_signature env sg =
             sg :: rem,
             final_env
         | Psig_open sod ->
-            let (_path, newenv, od) = type_open env sod in
+            let (newenv, od) = type_open env sod in
             let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_open od) env loc :: trem,
             rem, final_env
@@ -1387,7 +1439,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         in
         Tstr_modtype mtd, [sg], newenv
     | Pstr_open sod ->
-        let (_path, newenv, od) = type_open ~toplevel env sod in
+        let (newenv, od) = type_open ~toplevel env sod in
         Tstr_open od, [], newenv
     | Pstr_class cl ->
         List.iter
@@ -1469,14 +1521,22 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     Ctype.init_def(Ident.current_time());
     match sstr with
     | [] -> ([], [], env)
-    | pstr :: srem ->
+    | pstr :: srem -> begin
         let previous_saved_types = Cmt_format.get_saved_types () in
         let desc, sg, new_env = type_str_item env srem pstr in
         let str = { str_desc = desc; str_loc = pstr.pstr_loc; str_env = env } in
         Cmt_format.set_saved_types (Cmt_format.Partial_structure_item str
                                     :: previous_saved_types);
         let (str_rem, sig_rem, final_env) = type_struct new_env srem in
-        (str :: str_rem, sg @ sig_rem, final_env)
+        match extract_open_struct desc with
+        | Some tm -> begin
+            let tm_str = {str_desc = tm; str_loc = pstr.pstr_loc; str_env = env} in
+            let str = {str with str_env = new_env} in
+            (tm_str :: str :: str_rem, sg @ sig_rem, final_env)
+          end
+        | None ->
+            (str :: str_rem, sg @ sig_rem, final_env)
+      end
   in
   if !Clflags.annotations then
     (* moved to genannot *)
