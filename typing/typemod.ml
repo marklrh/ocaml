@@ -43,6 +43,8 @@ type error =
   | Recursive_module_require_explicit_type
   | Apply_generative
   | Cannot_scrape_alias of Path.t
+  | Invalid_open of Parsetree.module_expr
+  | Cannot_eliminate_anon_module of Ident.t * signature
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -86,10 +88,28 @@ let type_module_fwd : (Env.t -> Parsetree.module_expr ->
                        Typedtree.module_expr) ref =
   ref (fun _ _ -> assert false)
 
-let gm = ref None
+let mod_ident_counter = ref 0
+let generated_module_ident = ref []
+
+let push_current_mi mi =
+  generated_module_ident := mi :: !generated_module_ident
+
+let pop_current_mi () =
+  let id = List.hd !generated_module_ident in
+  generated_module_ident := List.tl !generated_module_ident;
+  id
+
+let gen_mod_ident () =
+  let n = !mod_ident_counter in
+  incr mod_ident_counter;
+  let ident = Ident.create (Printf.sprintf "M#%d" n) in
+  push_current_mi ident;
+  ident
 
 let type_open_ ?toplevel ovf env loc (me: Parsetree.module_expr) =
   match me.pmod_desc with
+  | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ | Pmod_apply _ ->
+      raise(Error(me.pmod_loc, env, Invalid_open me))
   | Pmod_ident lid -> begin
       let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
       match Env.open_signature ~loc ?toplevel ovf path env with
@@ -108,20 +128,17 @@ let type_open_ ?toplevel ovf env loc (me: Parsetree.module_expr) =
           ignore (extract_sig_open env lid.loc md.md_type);
           assert false
     end
-  | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ -> assert false
   | Pmod_structure _ -> begin
-      let param = Ident.create "M" in
-      gm := Some param;
-      let fake_root = Pident param in
+      let param = gen_mod_ident () in
+      let root = Pident param in
       let tme = !type_module_fwd env me in
-      Format.eprintf "%a@." Printtyp.modtype tme.mod_type;
       let md = {
         md_type = tme.mod_type;
         md_loc = me.pmod_loc;
         md_attributes = me.pmod_attributes;
       } in
       let newenv = Env.enter_module_declaration param md env in
-      match Env.open_signature ~loc ?toplevel ovf fake_root newenv with
+      match Env.open_signature ~loc ?toplevel ovf root newenv with
       | None -> assert false
       | Some opened_env -> tme, opened_env
     end
@@ -137,16 +154,14 @@ let extract_open_struct = function
       match od.open_expr.mod_desc with
       | Tmod_ident (_, _) -> None
       | Tmod_structure _ ->
-          let id = match !gm with
-            | None -> assert false
-            | Some d -> d in
+          let id = pop_current_mi () in
           let tm =
             Tstr_module {mb_id=id;
-                         mb_name={txt="M"; loc=Location.none};
+                         mb_name={txt=Ident.name id; loc=Location.none};
                          mb_expr = od.open_expr;
                          mb_attributes=od.open_expr.mod_attributes;
                          mb_loc=od.open_expr.mod_loc} in
-          Some tm
+          Some (tm, id)
       | _ -> assert false
     end
   | _ -> None
@@ -1529,10 +1544,19 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                                     :: previous_saved_types);
         let (str_rem, sig_rem, final_env) = type_struct new_env srem in
         match extract_open_struct desc with
-        | Some tm -> begin
-            let tm_str = {str_desc = tm; str_loc = pstr.pstr_loc; str_env = env} in
-            let str = {str with str_env = new_env} in
-            (tm_str :: str :: str_rem, sg @ sig_rem, final_env)
+        | Some (tm, id) -> begin
+            let tm_str = {str_desc = tm; str_loc = pstr.pstr_loc;
+                          str_env = env} in
+            let s_rem = Mty_signature sig_rem in begin
+            match Mtype.nondep_supertype new_env id s_rem with
+            | Mty_signature sg ->
+                let open_str = {str with str_env = new_env} in
+                (tm_str :: open_str :: str_rem, sg, final_env)
+            | exception Not_found ->
+                raise(Error(pstr.pstr_loc, env,
+                            Cannot_eliminate_anon_module(id, sig_rem)))
+            | _ -> assert false
+            end
           end
         | None ->
             (str :: str_rem, sg @ sig_rem, final_env)
@@ -1893,6 +1917,11 @@ let report_error ppf = function
       fprintf ppf
         "This is an alias for module %a, which is missing"
         path p
+  | Invalid_open _me ->
+      fprintf ppf "Invalid open"
+  | Cannot_eliminate_anon_module (id, sg) ->
+      fprintf ppf "The module identifier %a cannot be \
+        eliminated from %a" ident id signature sg
 
 let report_error env ppf err =
   Printtyp.wrap_printing_env env (fun () -> report_error ppf err)
