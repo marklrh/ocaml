@@ -323,7 +323,7 @@ module Mb:
 module Opn:
   sig
     val mk: ?loc: loc -> ?attrs:attrs -> ?docs:docs ->
-      ?override:override_flag -> module_expr -> open_description
+      ?override:override_flag -> open_expr -> open_description
   end
 
 (** Includes *)

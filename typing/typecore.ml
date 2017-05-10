@@ -90,7 +90,9 @@ let type_module =
 (* Forward declaration, to be filled in by Typemod.type_open *)
 
 let type_open =
-  ref (fun _ -> assert false)
+  ref ((fun _ -> assert false):
+         (override_flag -> Env.t -> Location.t ->
+          Parsetree.open_expr -> Typedtree.open_expr * Env.t))
 
 (* Forward declaration, to be filled in by Typemod.type_package *)
 
@@ -1368,7 +1370,7 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~explode ~env
   | Ppat_open (lid,p) ->
       let me = {pmod_desc=Pmod_ident lid; pmod_loc=lid.loc; pmod_attributes=[]} in
       let _tme, new_env =
-        !type_open Asttypes.Fresh !env sp.ppat_loc me in
+        !type_open Asttypes.Fresh !env sp.ppat_loc (OStr me) in
       let new_env = ref new_env in
       type_pat ~env:new_env p expected_ty ( fun p ->
         env := Env.copy_local !env ~from:!new_env;
@@ -1856,7 +1858,7 @@ let contains_gadt env p =
       | Ppat_open (lid,sub_p) ->
         let me = {pmod_desc=Pmod_ident lid; pmod_loc=lid.loc;
                   pmod_attributes=[]} in
-        let _, new_env = !type_open Asttypes.Override env p.ppat_loc me in
+        let _, new_env = !type_open Asttypes.Override env p.ppat_loc (OStr me) in
         loop new_env sub_p
     | _ -> iter_ppat (loop env) p
   in
@@ -2971,7 +2973,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   | Pexp_open (ovf, lid, e) ->
       let me = {pmod_desc=Pmod_ident lid; pmod_loc=lid.loc;
                 pmod_attributes=[]} in
-      let (_tme, newenv) = !type_open ovf env sexp.pexp_loc me in
+      let (_tme, newenv) = !type_open ovf env sexp.pexp_loc (OStr me) in
       let exp = type_expect newenv e ty_expected in
       { exp with
         exp_extra = (Texp_open (ovf, lid, newenv), loc,

@@ -448,9 +448,13 @@ and module_type_declaration =
      mtd_loc: Location.t;
     }
 
+and open_expr =
+    TOStr of module_expr
+  | TOSig of module_type
+
 and open_description =
     {
-     open_expr: module_expr;
+     open_expr: open_expr;
      open_override: override_flag;
      open_loc: Location.t;
      open_attributes: attribute list;

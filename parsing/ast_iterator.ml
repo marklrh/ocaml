@@ -52,6 +52,7 @@ type iterator = {
   module_type: iterator -> module_type -> unit;
   module_type_declaration: iterator -> module_type_declaration -> unit;
   open_description: iterator -> open_description -> unit;
+  open_expr: iterator -> open_expr -> unit;
   pat: iterator -> pattern -> unit;
   payload: iterator -> payload -> unit;
   signature: iterator -> signature -> unit;
@@ -527,9 +528,16 @@ let default_iterator =
 
     open_description =
       (fun this {popen_expr; popen_override = _; popen_attributes; popen_loc} ->
-         this.module_expr this popen_expr;
+         this.open_expr this popen_expr;
          this.location this popen_loc;
          this.attributes this popen_attributes
+      );
+
+    open_expr =
+      (fun this open_expr ->
+         match open_expr with
+         | OStr str -> this.module_expr this str
+         | OSig sg -> this.module_type this sg
       );
 
 

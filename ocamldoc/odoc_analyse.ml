@@ -41,7 +41,7 @@ let initial_env () =
     let open Asttypes in
     let loc = Location.in_file "ocamldoc command line" in
     let lid = {loc; txt = Longident.parse m } in
-    let me = Parsetree.({pmod_desc=Pmod_ident lid;
+    let me = Parsetree.(OStr {pmod_desc=Pmod_ident lid;
                          pmod_loc=loc; pmod_attributes=[]}) in
     snd (Typemod.type_open_ Override env lid.loc me) in
   (* Open the list of modules given as arguments of the "-open" flag

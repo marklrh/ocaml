@@ -62,6 +62,7 @@ type mapper =
       (rec_flag * value_binding list);
     value_description: mapper -> value_description -> value_description;
     with_constraint: mapper -> with_constraint -> with_constraint;
+    open_expr: mapper -> open_expr -> open_expr;
   }
 
 let id x = x
@@ -125,7 +126,7 @@ let structure_item sub {str_desc; str_loc; str_env} =
     | Tstr_include incl ->
         Tstr_include (include_infos (sub.module_expr sub) incl)
     | Tstr_open od ->
-        Tstr_open {od with open_expr = sub.module_expr sub od.open_expr}
+        Tstr_open {od with open_expr = sub.open_expr sub od.open_expr}
     | Tstr_attribute _ as d -> d
   in
   {str_desc; str_env; str_loc}
@@ -389,7 +390,7 @@ let signature_item sub x =
         Tsig_class_type
           (List.map (sub.class_type_declaration sub) list)
     | Tsig_open od ->
-        Tsig_open {od with open_expr = sub.module_expr sub od.open_expr}
+        Tsig_open {od with open_expr = sub.open_expr sub od.open_expr}
     | Tsig_attribute _ as d -> d
   in
   {x with sig_desc; sig_env}
@@ -479,6 +480,10 @@ let module_expr sub x =
           )
   in
   {x with mod_desc; mod_env}
+
+let open_expr sub = function
+  | TOStr str -> TOStr (module_expr sub str)
+  | TOSig sg -> TOSig (module_type sub sg)
 
 let module_binding sub x =
   let mb_expr = sub.module_expr sub x.mb_expr in
@@ -691,4 +696,5 @@ let default =
     value_bindings;
     value_description;
     with_constraint;
+    open_expr;
   }

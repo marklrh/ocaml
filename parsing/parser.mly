@@ -919,7 +919,15 @@ signature_item:
 open_statement:
   | OPEN override_flag ext_attributes module_expr post_item_attributes
       { let (ext, attrs) = $3 in
-        Opn.mk $4 ~override:$2 ~attrs:(attrs@$5)
+        Opn.mk (OStr $4) ~override:$2 ~attrs:(attrs@$5)
+          ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+      , ext}
+;
+
+open_sig_statement:
+  | OPEN override_flag ext_attributes module_type post_item_attributes
+      { let (ext, attrs) = $3 in
+        Opn.mk (OSig $4) ~override:$2 ~attrs:(attrs@$5)
           ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext}
 ;

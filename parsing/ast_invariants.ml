@@ -117,7 +117,7 @@ let iterator =
   in
   let open_description self opn =
     super.open_description self opn;
-    super.module_expr self opn.popen_expr
+    super.open_expr self opn.popen_expr
   in
   let with_constraint self wc =
     super.with_constraint self wc;

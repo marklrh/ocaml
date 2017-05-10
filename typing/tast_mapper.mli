@@ -61,6 +61,7 @@ type mapper =
       (rec_flag * value_binding list);
     value_description: mapper -> value_description -> value_description;
     with_constraint: mapper -> with_constraint -> with_constraint;
+    open_expr: mapper -> open_expr -> open_expr;
   }
 
 

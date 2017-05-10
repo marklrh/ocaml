@@ -106,63 +106,74 @@ let gen_mod_ident () =
   push_current_mi ident;
   ident
 
-let type_open_ ?toplevel ovf env loc (me: Parsetree.module_expr) =
-  match me.pmod_desc with
-  | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ | Pmod_apply _ ->
-      raise(Error(me.pmod_loc, env, Invalid_open me))
-  | Pmod_ident lid -> begin
-      let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
-      match Env.open_signature ~loc ?toplevel ovf path env with
-      | Some env ->
-          let tme =
-            {
-              mod_desc=Tmod_ident (path, lid);
-              mod_loc=lid.loc;
-              mod_type=Mty_ident path;
-              mod_env=env;
-              mod_attributes=me.pmod_attributes
-            } in
-          tme, env
-      | None ->
-          let md = Env.find_module path env in
-          ignore (extract_sig_open env lid.loc md.md_type);
-          assert false
+let type_open_ ?toplevel ovf env loc oe =
+  match oe with
+  | OStr me -> begin
+    match me.pmod_desc with
+    | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ | Pmod_apply _ ->
+        raise(Error(me.pmod_loc, env, Invalid_open me))
+    | Pmod_ident lid -> begin
+        let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
+        match Env.open_signature ~loc ?toplevel ovf path env with
+        | Some env ->
+            let tme =
+              {
+                mod_desc=Tmod_ident (path, lid);
+                mod_loc=lid.loc;
+                mod_type=Mty_ident path;
+                mod_env=env;
+                mod_attributes=me.pmod_attributes
+              } in
+            TOStr tme, env
+        | None ->
+            let md = Env.find_module path env in
+            ignore (extract_sig_open env lid.loc md.md_type);
+            assert false
+      end
+    | Pmod_structure _ -> begin
+        let param = gen_mod_ident () in
+        let root = Pident param in
+        let tme = !type_module_fwd env me in
+        let md = {
+          md_type = tme.mod_type;
+          md_loc = me.pmod_loc;
+          md_attributes = me.pmod_attributes;
+        } in
+        let newenv = Env.enter_module_declaration param md env in
+        match Env.open_signature ~loc ?toplevel ovf root newenv with
+        | None -> assert false
+        | Some opened_env -> TOStr tme, opened_env
+      end
+    | _ -> begin
+        (* Pmod_apply -> iirc functor application happens at runtime.
+                         what shall we do here?
+           Pmod_constraint *)
+        assert false
+      end
     end
-  | Pmod_structure _ -> begin
-      let param = gen_mod_ident () in
-      let root = Pident param in
-      let tme = !type_module_fwd env me in
-      let md = {
-        md_type = tme.mod_type;
-        md_loc = me.pmod_loc;
-        md_attributes = me.pmod_attributes;
-      } in
-      let newenv = Env.enter_module_declaration param md env in
-      match Env.open_signature ~loc ?toplevel ovf root newenv with
-      | None -> assert false
-      | Some opened_env -> tme, opened_env
+  | OSig _sg -> begin
+      failwith "unimplemented"
     end
-  | _ -> begin
-      (* Pmod_apply -> iirc functor application happens at runtime.
-                       what shall we do here?
-         Pmod_constraint *)
-      assert false
-    end
+
 
 let extract_open_struct = function
   | Tstr_open od -> begin
-      match od.open_expr.mod_desc with
-      | Tmod_ident (_, _) -> None
-      | Tmod_structure _ ->
-          let id = pop_current_mi () in
-          let tm =
-            Tstr_module {mb_id=id;
-                         mb_name={txt=Ident.name id; loc=Location.none};
-                         mb_expr = od.open_expr;
-                         mb_attributes=od.open_expr.mod_attributes;
-                         mb_loc=od.open_expr.mod_loc} in
-          Some (tm, id)
-      | _ -> assert false
+      match od.open_expr with
+      | TOStr tstr -> begin
+        match tstr.mod_desc with
+        | Tmod_ident (_, _) -> None
+        | Tmod_structure _ ->
+            let id = pop_current_mi () in
+            let tm =
+              Tstr_module {mb_id=id;
+                           mb_name={txt=Ident.name id; loc=Location.none};
+                           mb_expr = tstr;
+                           mb_attributes=tstr.mod_attributes;
+                           mb_loc=tstr.mod_loc} in
+            Some (tm, id)
+        | _ -> assert false
+        end
+      | TOSig _sg -> failwith "unimplemented"
     end
   | _ -> None
 

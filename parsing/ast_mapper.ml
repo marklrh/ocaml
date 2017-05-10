@@ -57,6 +57,7 @@ type mapper = {
   module_type_declaration: mapper -> module_type_declaration
                            -> module_type_declaration;
   open_description: mapper -> open_description -> open_description;
+  open_expr: mapper -> open_expr -> open_expr;
   pat: mapper -> pattern -> pattern;
   payload: mapper -> payload -> payload;
   signature: mapper -> signature -> signature;
@@ -562,12 +563,18 @@ let default_mapper =
 
     open_description =
       (fun this {popen_expr; popen_override; popen_attributes; popen_loc} ->
-         Opn.mk (this.module_expr this popen_expr)
+         Opn.mk (this.open_expr this popen_expr)
            ~override:popen_override
            ~loc:(this.location this popen_loc)
            ~attrs:(this.attributes this popen_attributes)
       );
 
+    open_expr =
+      (fun this open_expr ->
+         match open_expr with
+         | OStr str -> OStr (this.module_expr this str)
+         | OSig sg -> OSig (this.module_type this sg)
+      );
 
     include_description =
       (fun this {pincl_mod; pincl_attributes; pincl_loc} ->

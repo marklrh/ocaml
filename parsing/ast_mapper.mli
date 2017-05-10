@@ -84,6 +84,7 @@ type mapper = {
   module_type_declaration: mapper -> module_type_declaration
                            -> module_type_declaration;
   open_description: mapper -> open_description -> open_description;
+  open_expr: mapper -> open_expr -> open_expr;
   pat: mapper -> pattern -> pattern;
   payload: mapper -> payload -> payload;
   signature: mapper -> signature -> signature;

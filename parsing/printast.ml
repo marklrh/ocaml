@@ -682,7 +682,7 @@ and signature_item i ppf x =
   | Psig_open od ->
       line i ppf "Psig_open %a %a\n"
         fmt_override_flag od.popen_override
-        (module_expr i) od.popen_expr;
+        (open_expr i) od.popen_expr;
       attributes i ppf od.popen_attributes
   | Psig_include incl ->
       line i ppf "Psig_include\n";
@@ -789,7 +789,7 @@ and structure_item i ppf x =
   | Pstr_open od ->
       line i ppf "Pstr_open %a %a\n"
         fmt_override_flag od.popen_override
-        (module_expr i) od.popen_expr;
+        (open_expr i) od.popen_expr;
       attributes i ppf od.popen_attributes
   | Pstr_class (l) ->
       line i ppf "Pstr_class\n";
@@ -808,6 +808,11 @@ and structure_item i ppf x =
   | Pstr_attribute (s, arg) ->
       line i ppf "Pstr_attribute \"%s\"\n" s.txt;
       payload i ppf arg
+
+and open_expr i ppf x =
+  match x with
+  | OStr str -> module_expr i ppf str
+  | OSig sg -> module_type i ppf sg
 
 and module_declaration i ppf pmd =
   string_loc i ppf pmd.pmd_name;

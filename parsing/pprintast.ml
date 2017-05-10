@@ -989,7 +989,7 @@ and signature_item ctxt f x : unit =
   | Psig_open od ->
       pp f "@[<hov2>open%s@ %a@]%a"
         (override od.popen_override)
-        (module_expr ctxt) od.popen_expr
+        (open_expr ctxt) od.popen_expr
         (item_attributes ctxt) od.popen_attributes
   | Psig_include incl ->
       pp f "@[<hov2>include@ %a@]%a"
@@ -1187,7 +1187,7 @@ and structure_item ctxt f x =
   | Pstr_open od ->
       pp f "@[<2>open%s@;%a@]%a"
         (override od.popen_override)
-        (module_expr ctxt) od.popen_expr
+        (open_expr ctxt) od.popen_expr
         (item_attributes ctxt) od.popen_attributes
   | Pstr_modtype {pmtd_name=s; pmtd_type=md; pmtd_attributes=attrs} ->
       pp f "@[<hov2>module@ type@ %s%a@]%a"
@@ -1441,6 +1441,12 @@ and directive_argument f x =
   | Pdir_int (n, Some m) -> pp f "@ %s%c" n m
   | Pdir_ident (li) -> pp f "@ %a" longident li
   | Pdir_bool (b) -> pp f "@ %s" (string_of_bool b)
+
+and open_expr ctxt f x =
+  match x with
+  | OStr str -> module_expr ctxt f str
+  | OSig sg -> module_type ctxt f sg
+
 
 let toplevel_phrase f x =
   match x with

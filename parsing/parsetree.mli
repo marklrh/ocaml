@@ -725,13 +725,18 @@ and module_type_declaration =
    S       (abstract module type declaration, pmtd_type = None)
 *)
 
+and open_expr =
+    OStr of module_expr
+  | OSig of module_type
+
 and open_description =
     {
-     popen_expr: module_expr;
+     popen_expr: open_expr;
      popen_override: override_flag;
      popen_loc: Location.t;
      popen_attributes: attributes;
     }
+
 (* open! X - popen_override = Override (silences the 'used identifier
                               shadowing' warning)
    open  X - popen_override = Fresh
