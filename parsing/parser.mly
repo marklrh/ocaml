@@ -902,7 +902,7 @@ signature_item:
       { let (l, ext) = $1 in mksig_ext (Psig_recmodule (List.rev l)) ext }
   | module_type_declaration
       { let (body, ext) = $1 in mksig_ext (Psig_modtype body) ext }
-  | open_statement
+  | open_sig_statement
       { let (body, ext) = $1 in mksig_ext (Psig_open body) ext }
   | sig_include_statement
       { let (body, ext) = $1 in mksig_ext (Psig_include body) ext }

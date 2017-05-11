@@ -151,10 +151,28 @@ let type_open_ ?toplevel ovf env loc oe =
         assert false
       end
     end
-  | OSig _sg -> begin
-      failwith "unimplemented"
+  | OSig sg -> begin
+      match sg.pmty_desc with
+      | Pmty_ident lid -> begin
+          let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
+          match Env.open_signature ~loc ?toplevel ovf path env with
+          | Some env ->
+              let tmg =
+                {
+                  mty_desc=Tmty_ident (path, lid);
+                  mty_loc=lid.loc;
+                  mty_type=Mty_ident path;
+                  mty_env=env;
+                  mty_attributes=sg.pmty_attributes
+                } in
+              TOSig tmg, env
+          | None ->
+              let md = Env.find_module path env in
+              ignore (extract_sig_open env lid.loc md.md_type);
+              assert false
+        end
+      | _ -> assert false
     end
-
 
 let extract_open_struct = function
   | Tstr_open od -> begin
