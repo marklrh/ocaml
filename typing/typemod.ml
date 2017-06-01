@@ -149,21 +149,22 @@ let type_open_ ?toplevel ovf env loc (me: Parsetree.module_expr) =
       assert false
     end
 
+let extract_open od =
+  match od.open_expr.mod_desc with
+  | Tmod_ident (_, _) -> None
+  | Tmod_structure _ ->
+      let id = pop_current_mi () in
+      let tm =
+        Tstr_module {mb_id=id;
+                     mb_name={txt=Ident.name id; loc=Location.none};
+                     mb_expr = od.open_expr;
+                     mb_attributes=od.open_expr.mod_attributes;
+                     mb_loc=od.open_expr.mod_loc} in
+      Some (tm, id)
+  | _ -> assert false
+
 let extract_open_struct = function
-  | Tstr_open od -> begin
-      match od.open_expr.mod_desc with
-      | Tmod_ident (_, _) -> None
-      | Tmod_structure _ ->
-          let id = pop_current_mi () in
-          let tm =
-            Tstr_module {mb_id=id;
-                         mb_name={txt=Ident.name id; loc=Location.none};
-                         mb_expr = od.open_expr;
-                         mb_attributes=od.open_expr.mod_attributes;
-                         mb_loc=od.open_expr.mod_loc} in
-          Some (tm, id)
-      | _ -> assert false
-    end
+  | Tstr_open od -> extract_open od
   | _ -> None
 
 let type_open ?toplevel env sod =
