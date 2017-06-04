@@ -90,20 +90,26 @@ let type_module_fwd : (Env.t -> Parsetree.module_expr ->
 
 let mod_ident_counter = ref 0
 let generated_module_ident = ref []
+let generated_module_ident_in_sig = ref []
 
-let push_current_mi mi =
-  generated_module_ident := mi :: !generated_module_ident
+let push_current_mid (mi, md) in_sig =
+  if in_sig then
+    generated_module_ident_in_sig := (mi, md) :: !generated_module_ident
+  else
+    generated_module_ident := (mi, md) :: !generated_module_ident
 
-let pop_current_mi () =
-  let id = List.hd !generated_module_ident in
-  generated_module_ident := List.tl !generated_module_ident;
-  id
+let pop_current_mid in_sig =
+  let slots =
+    if in_sig then generated_module_ident_in_sig
+    else generated_module_ident in
+  let mi_md = List.hd !slots in
+  slots := List.tl !slots;
+  mi_md
 
 let gen_mod_ident () =
   let n = !mod_ident_counter in
   incr mod_ident_counter;
   let ident = Ident.create (Printf.sprintf "M#%d" n) in
-  push_current_mi ident;
   ident
 
 let type_open_ ?toplevel in_sig ovf env loc me =
@@ -130,23 +136,15 @@ let type_open_ ?toplevel in_sig ovf env loc me =
     end
   | Pmod_structure _ -> begin
       let ident = gen_mod_ident () in
-      let root = Pident ident in
       let tme = !type_module_fwd env me in
-      let newenv =
-        if in_sig then begin
-          let mtd = {
-            mtd_type=Some tme.mod_type;
-            mtd_attributes=me.pmod_attributes;
-            mtd_loc=me.pmod_loc;
-          } in
-          snd (Env.enter_modtype ident.Ident.name mtd env)
-        end else env in
       let md = {
         md_type = tme.mod_type;
         md_loc = me.pmod_loc;
         md_attributes = me.pmod_attributes;
       } in
-      let newenv = Env.enter_module_declaration ident md newenv in
+      push_current_mid (ident, md) in_sig;
+      let newenv = Env.enter_module_declaration ident md env in
+      let root = Pident ident in
       match Env.open_signature ~loc ?toplevel ovf root newenv with
       | None -> assert false
       | Some opened_env -> tme, opened_env
@@ -162,7 +160,7 @@ let extract_open od =
   match od.open_expr.mod_desc with
   | Tmod_ident (_, _) -> None
   | Tmod_structure _ ->
-      let id = pop_current_mi () in
+      let id = fst (pop_current_mid false) in
       let tm =
         Tstr_module {mb_id=id;
                      mb_name={txt=Ident.name id; loc=Location.none};
@@ -860,6 +858,17 @@ and transl_modtype_decl names env
      mtd_loc=pmtd_loc;
     }
   in
+  let newenv =
+    match tmty with
+    | Some {mty_desc=Tmty_signature _} -> begin
+        let newenv =
+          List.fold_left (fun env (id, decl) ->
+              Env.enter_module_declaration id decl env)
+            newenv (List.rev !generated_module_ident_in_sig) in
+        generated_module_ident_in_sig := [];
+        newenv
+      end
+    | _ -> newenv in
   newenv, mtd, Sig_modtype(id, decl)
 
 and transl_recmodule_modtypes env sdecls =
