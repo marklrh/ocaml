@@ -160,14 +160,14 @@ let extract_open od =
   match od.open_expr.mod_desc with
   | Tmod_ident (_, _) -> None
   | Tmod_structure _ ->
-      let id, _, env = (pop_current_mid false) in
+      let id, md, env = (pop_current_mid false) in
       let tm =
         Tstr_module {mb_id=id;
                      mb_name={txt=Ident.name id; loc=Location.none};
                      mb_expr = od.open_expr;
                      mb_attributes=od.open_expr.mod_attributes;
                      mb_loc=od.open_expr.mod_loc} in
-      Some (tm, id, env)
+      Some (tm, md, id, env)
   | _ -> assert false
 
 let extract_open_struct = function
@@ -1564,14 +1564,18 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                                     :: previous_saved_types);
         let (str_rem, sig_rem, final_env) = type_struct new_env srem in
         match extract_open_struct desc with
-        | Some (tm, id, md_env) -> begin
-            let tm_str = {str_desc = tm; str_loc = pstr.pstr_loc;
+        | Some (tm, md, id, md_env) -> begin
+            let loc = pstr.pstr_loc in
+            let tm_str = {str_desc = tm; str_loc = loc;
                           str_env = env} in
             let s_rem = Mty_signature sig_rem in begin
             match Mtype.nondep_supertype new_env id s_rem with
             | Mty_signature sg ->
                 let open_str = {str with str_env = md_env} in
-                (tm_str :: open_str :: str_rem, sg, final_env)
+                let md_sig =
+                  Sig_module (id, {md_type=md.Types.md_type; md_loc=loc;
+                                   md_attributes = []}, Trec_not) in
+                (tm_str :: open_str :: str_rem, md_sig :: sg, final_env)
             | exception Not_found ->
                 raise(Error(pstr.pstr_loc, env,
                             Cannot_eliminate_anon_module(id, sig_rem)))
