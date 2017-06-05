@@ -92,19 +92,19 @@ let mod_ident_counter = ref 0
 let generated_module_ident = ref []
 let generated_module_ident_in_sig = ref []
 
-let push_current_mid (mi, md) in_sig =
+let push_current_mid (mi, md, env) in_sig =
   if in_sig then
-    generated_module_ident_in_sig := (mi, md) :: !generated_module_ident
+    generated_module_ident_in_sig := (mi, md, env) :: !generated_module_ident
   else
-    generated_module_ident := (mi, md) :: !generated_module_ident
+    generated_module_ident := (mi, md, env) :: !generated_module_ident
 
 let pop_current_mid in_sig =
   let slots =
     if in_sig then generated_module_ident_in_sig
     else generated_module_ident in
-  let mi_md = List.hd !slots in
+  let slot = List.hd !slots in
   slots := List.tl !slots;
-  mi_md
+  slot
 
 let gen_mod_ident () =
   let n = !mod_ident_counter in
@@ -142,8 +142,8 @@ let type_open_ ?toplevel in_sig ovf env loc me =
         md_loc = me.pmod_loc;
         md_attributes = me.pmod_attributes;
       } in
-      push_current_mid (ident, md) in_sig;
       let newenv = Env.enter_module_declaration ident md env in
+      push_current_mid (ident, md, newenv) in_sig;
       let root = Pident ident in
       match Env.open_signature ~loc ?toplevel ovf root newenv with
       | None -> assert false
@@ -160,14 +160,14 @@ let extract_open od =
   match od.open_expr.mod_desc with
   | Tmod_ident (_, _) -> None
   | Tmod_structure _ ->
-      let id = fst (pop_current_mid false) in
+      let id, _, env = (pop_current_mid false) in
       let tm =
         Tstr_module {mb_id=id;
                      mb_name={txt=Ident.name id; loc=Location.none};
                      mb_expr = od.open_expr;
                      mb_attributes=od.open_expr.mod_attributes;
                      mb_loc=od.open_expr.mod_loc} in
-      Some (tm, id)
+      Some (tm, id, env)
   | _ -> assert false
 
 let extract_open_struct = function
@@ -862,7 +862,7 @@ and transl_modtype_decl names env
     match tmty with
     | Some {mty_desc=Tmty_signature _} -> begin
         let newenv =
-          List.fold_left (fun env (id, decl) ->
+          List.fold_left (fun env (id, decl, _) ->
               Env.enter_module_declaration id decl env)
             newenv (List.rev !generated_module_ident_in_sig) in
         generated_module_ident_in_sig := [];
@@ -1564,13 +1564,13 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                                     :: previous_saved_types);
         let (str_rem, sig_rem, final_env) = type_struct new_env srem in
         match extract_open_struct desc with
-        | Some (tm, id) -> begin
+        | Some (tm, id, md_env) -> begin
             let tm_str = {str_desc = tm; str_loc = pstr.pstr_loc;
                           str_env = env} in
             let s_rem = Mty_signature sig_rem in begin
             match Mtype.nondep_supertype new_env id s_rem with
             | Mty_signature sg ->
-                let open_str = {str with str_env = new_env} in
+                let open_str = {str with str_env = md_env} in
                 (tm_str :: open_str :: str_rem, sg, final_env)
             | exception Not_found ->
                 raise(Error(pstr.pstr_loc, env,
