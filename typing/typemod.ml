@@ -156,11 +156,13 @@ let type_open_ ?toplevel in_sig ovf env loc me =
       assert false
     end
 
-let extract_open od =
+let extract_open od in_sig =
   match od.open_expr.mod_desc with
   | Tmod_ident (_, _) -> None
   | Tmod_structure _ ->
-      let id, md, env = (pop_current_mid false) in
+      let id, md, env =
+        if in_sig then List.hd !generated_module_ident_in_sig
+        else (pop_current_mid false) in
       let tm =
         Tstr_module {mb_id=id;
                      mb_name={txt=Ident.name id; loc=Location.none};
@@ -171,7 +173,7 @@ let extract_open od =
   | _ -> assert false
 
 let extract_open_struct = function
-  | Tstr_open od -> extract_open od
+  | Tstr_open od -> extract_open od false
   | _ -> None
 
 let type_open ?toplevel env sod in_sig =
@@ -755,11 +757,26 @@ and transl_signature env sg =
             mksig (Tsig_modtype mtd) env loc :: trem,
             sg :: rem,
             final_env
-        | Psig_open sod ->
+        | Psig_open sod -> begin
             let (newenv, od) = type_open env sod true in
             let (trem, rem, final_env) = transl_sig newenv srem in
+            begin
+            match extract_open od true with
+            | None -> ()
+            | Some (_, _, id, _) -> begin
+                let s_rem = Mty_signature rem in begin
+                match Mtype.nondep_supertype newenv id s_rem with
+                | Mty_signature _ -> ()
+                | exception Not_found ->
+                    raise(Error(sod.popen_loc, env,
+                                Cannot_eliminate_anon_module(id, rem)))
+                | _ -> assert false
+                end
+              end
+            end;
             mksig (Tsig_open od) env loc :: trem,
             rem, final_env
+          end
         | Psig_include sincl ->
             let smty = sincl.pincl_mod in
             let tmty =
