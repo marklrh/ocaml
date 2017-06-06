@@ -112,6 +112,10 @@ let gen_mod_ident () =
   let ident = Ident.create (Printf.sprintf "M#%d" n) in
   ident
 
+let open_struct_level = ref 0
+let enter_struct () = incr open_struct_level
+let leave_struct () = decr open_struct_level
+
 let type_open_ ?toplevel in_sig ovf env loc me =
   match me.pmod_desc with
   | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ | Pmod_apply _ ->
@@ -135,8 +139,10 @@ let type_open_ ?toplevel in_sig ovf env loc me =
           assert false
     end
   | Pmod_structure _ -> begin
+      enter_struct ();
       let ident = gen_mod_ident () in
       let tme = !type_module_fwd env me in
+      leave_struct ();
       let md = {
         md_type = tme.mod_type;
         md_loc = me.pmod_loc;
@@ -759,20 +765,22 @@ and transl_signature env sg =
             final_env
         | Psig_open sod -> begin
             let (newenv, od) = type_open env sod true in
-            let (trem, rem, final_env) = transl_sig newenv srem in
-            begin
-            match extract_open od true with
-            | None -> ()
-            | Some (_, _, id, _) -> begin
-                let s_rem = Mty_signature rem in begin
-                match Mtype.nondep_supertype newenv id s_rem with
-                | Mty_signature _ -> ()
-                | exception Not_found ->
-                    raise(Error(sod.popen_loc, env,
-                                Cannot_eliminate_anon_module(id, rem)))
-                | _ -> assert false
+            let (trem, rem, final_env) = transl_sig newenv srem in begin
+            if !open_struct_level = 0 then
+              begin
+              match extract_open od true with
+              | None -> ()
+              | Some (_, _, id, _) -> begin
+                  let s_rem = Mty_signature rem in begin
+                  match Mtype.nondep_supertype newenv id s_rem with
+                  | Mty_signature _ -> ()
+                  | exception Not_found ->
+                      raise(Error(sod.popen_loc, env,
+                                  Cannot_eliminate_anon_module(id, rem)))
+                  | _ -> assert false
+                  end
                 end
-              end
+              end else ()
             end;
             mksig (Tsig_open od) env loc :: trem,
             rem, final_env
@@ -1585,19 +1593,22 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
             let loc = pstr.pstr_loc in
             let tm_str = {str_desc = tm; str_loc = loc;
                           str_env = env} in
-            let s_rem = Mty_signature sig_rem in begin
-            match Mtype.nondep_supertype new_env id s_rem with
-            | Mty_signature sg ->
-                let open_str = {str with str_env = md_env} in
-                let md_sig =
-                  Sig_module (id, {md_type=md.Types.md_type; md_loc=loc;
-                                   md_attributes = []}, Trec_not) in
-                (tm_str :: open_str :: str_rem, md_sig :: sg, final_env)
-            | exception Not_found ->
-                raise(Error(pstr.pstr_loc, env,
-                            Cannot_eliminate_anon_module(id, sig_rem)))
-            | _ -> assert false
-            end
+            let open_str = {str with str_env = md_env} in
+            let md_sig =
+              Sig_module (id, {md_type=md.Types.md_type; md_loc=loc;
+                               md_attributes = []}, Trec_not) in
+            if !open_struct_level = 0 then begin
+              let s_rem = Mty_signature sig_rem in begin
+              match Mtype.nondep_supertype new_env id s_rem with
+              | Mty_signature sg ->
+                  (tm_str :: open_str :: str_rem, md_sig :: sg, final_env)
+              | exception Not_found ->
+                  raise(Error(pstr.pstr_loc, env,
+                              Cannot_eliminate_anon_module(id, sig_rem)))
+              | _ -> assert false
+              end
+            end else
+              (tm_str :: open_str :: str_rem, md_sig :: sig_rem, final_env)
           end
         | None ->
             (str :: str_rem, sg @ sig_rem, final_env)
