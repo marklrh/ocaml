@@ -112,6 +112,14 @@ let gen_mod_ident () =
   let ident = Ident.create (Printf.sprintf "M#%d" n) in
   ident
 
+let saved_full_mod_types = ref []
+let push_mod_type mt =
+  saved_full_mod_types := mt :: !saved_full_mod_types
+let pop_mod_type () =
+  let mt = List.hd !saved_full_mod_types in
+  saved_full_mod_types := List.tl !saved_full_mod_types;
+  mt
+
 let open_struct_level = ref 0
 let enter_struct () = incr open_struct_level
 let leave_struct () = decr open_struct_level
@@ -143,8 +151,9 @@ let type_open_ ?toplevel in_sig ovf env loc me =
       let ident = gen_mod_ident () in
       let tme = !type_module_fwd env me in
       leave_struct ();
+      let full_modtype = pop_mod_type () in
       let md = {
-        md_type = tme.mod_type;
+        md_type = full_modtype;
         md_loc = me.pmod_loc;
         md_attributes = me.pmod_attributes;
       } in
@@ -1580,14 +1589,14 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
   let rec type_struct env sstr =
     Ctype.init_def(Ident.current_time());
     match sstr with
-    | [] -> ([], [], env)
+    | [] -> ([], [], [], env)
     | pstr :: srem -> begin
         let previous_saved_types = Cmt_format.get_saved_types () in
         let desc, sg, new_env = type_str_item env srem pstr in
         let str = { str_desc = desc; str_loc = pstr.pstr_loc; str_env = env } in
         Cmt_format.set_saved_types (Cmt_format.Partial_structure_item str
                                     :: previous_saved_types);
-        let (str_rem, sig_rem, final_env) = type_struct new_env srem in
+        let (str_rem, sig_rem, fsig_rem, final_env) = type_struct new_env srem in
         match extract_open_struct desc with
         | Some (tm, md, id, md_env) -> begin
             let loc = pstr.pstr_loc in
@@ -1601,17 +1610,19 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
               let s_rem = Mty_signature sig_rem in begin
               match Mtype.nondep_supertype new_env id s_rem with
               | Mty_signature sg ->
-                  (tm_str :: open_str :: str_rem, md_sig :: sg, final_env)
+                  (tm_str :: open_str :: str_rem, sg,
+                   md_sig :: fsig_rem, final_env)
               | exception Not_found ->
                   raise(Error(pstr.pstr_loc, env,
                               Cannot_eliminate_anon_module(id, sig_rem)))
               | _ -> assert false
               end
             end else
-              (tm_str :: open_str :: str_rem, md_sig :: sig_rem, final_env)
+              (tm_str :: open_str :: str_rem, sig_rem,
+               md_sig :: fsig_rem, final_env)
           end
         | None ->
-            (str :: str_rem, sg @ sig_rem, final_env)
+            (str :: str_rem, sg @ sig_rem, sg @ fsig_rem, final_env)
       end
   in
   if !Clflags.annotations then
@@ -1619,7 +1630,10 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     List.iter (function {pstr_loc = l} -> Stypes.record_phrase l) sstr;
   let previous_saved_types = Cmt_format.get_saved_types () in
   if not toplevel then Builtin_attributes.warning_enter_scope ();
-  let (items, sg, final_env) = type_struct env sstr in
+  let (items, sg, full_sg, final_env) = type_struct env sstr in
+  if !open_struct_level <> 0 then begin
+    push_mod_type (Mty_signature full_sg)
+  end;
   let str = { str_items = items; str_type = sg; str_final_env = final_env } in
   if not toplevel then Builtin_attributes.warning_leave_scope ();
   Cmt_format.set_saved_types
