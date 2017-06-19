@@ -17,9 +17,9 @@ Work:
   [branch](https://github.com/objmagic/ocaml/tree/object-inherit),
   [PR](https://github.com/ocaml/ocaml/pull/1118)
 
-* pprintast (`-dsource`) fix
+* pprintast (`-dsource`) fix  
   [PR 915](https://github.com/ocaml/ocaml/pull/915),
   [PR 539](https://github.com/ocaml/ocaml/pull/539)
 
-* Allow `[]` as type constructor
+* Allow `[]` as type constructor  
   [PR 234](https://github.com/ocaml/ocaml/pull/234)
