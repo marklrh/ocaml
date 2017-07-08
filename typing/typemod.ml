@@ -126,7 +126,7 @@ let leave_struct () = decr open_struct_level
 
 let type_open_ ?toplevel in_sig ovf env loc me =
   match me.pmod_desc with
-  | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ | Pmod_apply _ ->
+  | Pmod_functor _ | Pmod_unpack _ | Pmod_extension _ ->
       raise(Error(me.pmod_loc, env, Invalid_open me))
   | Pmod_ident lid -> begin
       let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
@@ -146,11 +146,16 @@ let type_open_ ?toplevel in_sig ovf env loc me =
           ignore (extract_sig_open env lid.loc md.md_type);
           assert false
     end
-  | Pmod_structure _ -> begin
+  | _ -> begin
       enter_struct ();
       let ident = gen_mod_ident () in
       let tme = !type_module_fwd env me in
       leave_struct ();
+      begin
+      match tme.mod_type with
+      | Mty_signature _ -> ()
+      | _ -> raise(Error(me.pmod_loc, env, Invalid_open me));
+      end;
       let full_modtype = pop_mod_type () in
       let md = {
         md_type = full_modtype;
@@ -164,17 +169,11 @@ let type_open_ ?toplevel in_sig ovf env loc me =
       | None -> assert false
       | Some opened_env -> tme, opened_env
     end
-  | _ -> begin
-      (* Pmod_apply -> iirc functor application happens at runtime.
-                       what shall we do here?
-         Pmod_constraint *)
-      assert false
-    end
 
 let extract_open od in_sig =
   match od.open_expr.mod_desc with
   | Tmod_ident (_, _) -> None
-  | Tmod_structure _ ->
+  | Tmod_structure _ | Tmod_apply _ | Tmod_constraint _ ->
       let id, md, env =
         if in_sig then List.hd !generated_module_ident_in_sig
         else (pop_current_mid false) in
