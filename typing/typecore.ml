@@ -1921,6 +1921,57 @@ let rec name_pattern default = function
       | Tpat_alias(_, id, _) -> id
       | _ -> name_pattern default rem
 
+(* suggest grouping *)
+let suggest_grouping pat_slot_list =
+  let module Pos = struct
+    type t = int
+    let equal (x:int) (y:int) = x = y
+    let hash x = x
+    let compare (x:int) (y:int) = compare x y
+    let output ch x = Printf.fprintf ch "%d" x
+    let print fmt x = Format.fprintf fmt "%d" x
+  end in
+  let module IM = struct
+    type t = Pos.t
+    include Identifiable.Make(Pos)
+  end in
+  let module SCC_pat = Strongly_connected_components.Make(IM) in
+  let module SMap = Map.Make(struct
+    type t = string let compare = compare
+  end) in
+  let pat_pos, _ =
+    let pats =
+      List.map (fun pat ->
+        List.map (fun {Ident.name} -> name)
+        (Typedtree.pat_bound_idents pat))
+      (List.map fst pat_slot_list) in
+    List.fold_left (fun (m, pos) pats ->
+      let s = List.fold_left (fun m pat -> SMap.add pat pos m) m pats in
+      s, pos + 1) (SMap.empty, 0) pats in
+  let fold_dep_graph (patg_dep, pos) (_, dep_values) =
+    let patg_dep' =
+      match dep_values with
+      | None -> IM.Map.add pos IM.Set.empty patg_dep
+      | Some {contents=deps} ->
+          List.fold_left (fun patg_dep (dep, _) ->
+            match SMap.find_opt dep pat_pos with
+            | None -> patg_dep
+            | Some patg_i -> begin
+                match IM.Map.find_opt pos patg_dep with
+                | None -> IM.Map.add pos (IM.Set.singleton patg_i) patg_dep
+                | Some s -> IM.Map.add pos (IM.Set.add patg_i s) patg_dep
+              end) (IM.Map.add pos IM.Set.empty patg_dep) deps
+    in patg_dep', pos + 1 in
+  let m, _ = List.fold_left fold_dep_graph (IM.Map.empty, 0) pat_slot_list in
+  let cliques = SCC_pat.connected_components_sorted_from_roots_to_leaf m in
+  Array.iter (
+    function
+    | SCC_pat.Has_loop pat_groups when List.length pat_slot_list > 1 -> begin
+        Format.eprintf "Loop: %s@."
+        (String.concat "," (List.map string_of_int pat_groups))
+      end
+    | _ -> ()) cliques
+
 (* Typing of expressions *)
 
 let unify_exp env exp expected_ty =
@@ -4117,6 +4168,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
   (* ignore (pat_slot_list:
      (Typedtree.pattern * (string * Types.value_description)
      list ref option) list ); *)
+  (*
   List.iter (fun (pat, slot) ->
     Format.eprintf "%s %a@." "printing pattern:"
     Parmatch.top_pretty pat;
@@ -4129,7 +4181,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
           Format.eprintf "%a@." (Printtyp.value_description (Ident.create name)) vd
           ) !slot);
     Format.eprintf "<<<%s@." "Done printing slot")
-    pat_slot_list;
+    pat_slot_list; *)
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
     let {pvb_pat; pvb_attributes} = List.hd spat_sexp_list in
@@ -4139,47 +4191,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
          Location.prerr_warning pvb_pat.ppat_loc Warnings.Unused_rec_flag
       )
   end;
-  let module IdentsPos = struct
-    type t = int
-    let equal (x:int) (y:int) = x = y
-    let hash x = x
-    let compare (x:int) (y:int) = compare x y
-    let output ch x = Printf.fprintf ch "%d" x
-    let print fmt x = Format.fprintf fmt "%d" x
-    end in
-  let module IM = struct
-    type t = IdentsPos.t
-    include Identifiable.Make(IdentsPos) end in
-  let module SCC_pat = Strongly_connected_components.Make(IM) in
-  let module SMap = Map.Make(struct type t = string let compare = compare end) in
-  let pat_pos, _ = List.fold_left (fun (s, pos) pats ->
-    let s = List.fold_left (fun s pat -> SMap.add pat pos s) s pats in
-    (s, pos + 1)) (SMap.empty, 0)
-    (List.map (fun pat ->
-      List.map (fun {Ident.name} -> name) (Typedtree.pat_bound_idents pat))
-        (List.map fst pat_slot_list)) in
-  let m, _ =
-    List.fold_left (fun (patg_dep, pos) (_, dep_values) ->
-      let patg_dep' =
-      match dep_values with
-      | None -> patg_dep
-      | Some {contents=deps} ->
-          List.fold_left
-            (fun patg_dep (dep, _) ->
-              match SMap.find_opt dep pat_pos with
-              | None -> patg_dep
-              | Some patg_i -> begin
-                  match IM.Map.find_opt pos patg_dep with
-                  | None -> IM.Map.add pos (IM.Set.singleton patg_i) patg_dep
-                  | Some s -> IM.Map.add pos (IM.Set.add patg_i s) patg_dep
-                end) patg_dep deps
-      in patg_dep', pos + 1)
-    (IM.Map.empty, 0) pat_slot_list in
-  IM.Map.iter (fun pos set -> Format.eprintf "pos: %d %s@." pos (IM.Set.to_string set)) m;
-  let cliques = SCC_pat.connected_components_sorted_from_roots_to_leaf m in
-  Array.iter (function SCC_pat.No_loop _ -> () | SCC_pat.Has_loop pat_groups ->
-    Format.eprintf "Loop: %s@." (String.concat "," (List.map string_of_int pat_groups))) cliques;
-  (* objmagic: should start working on here *)
+  suggest_grouping pat_slot_list;
   List.iter2
     (fun pat exp ->
       ignore(check_partial env pat.pat_type pat.pat_loc [case pat exp]))
