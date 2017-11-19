@@ -33,18 +33,24 @@ include struct
   let () =
     match run() with exception Interrupt -> () | _ -> assert false
 end
-[%%expect{||}
+[%%expect{|
+val run : unit -> 'a = <fun>
+|}];;
 
 module type S = sig
-  open struct open struct type t = int end type t = int -> int end
+  open struct
+    open struct
+      type t' = char
+    end
+    type t = t' -> int end
   val x : t
 end
 
 module M : S = struct
-  let x = fun n -> n + 1
+  let x = Char.code
 end
 [%%expect{|
-module type S = sig val x : M#3.t end
+module type S = sig val x : char -> int end
 module M : S
 |}];;
 
@@ -70,4 +76,9 @@ Error: The module identifier M#7 cannot be eliminated from val x : M#7.t
 module type S = sig open struct assert false end end;;
 [%%expect{|
 module type S = sig  end
+|}];;
+
+module type S = sig open struct type t = int end val x : t end;;
+[%%expect{|
+module type S = sig val x : int end
 |}];;
