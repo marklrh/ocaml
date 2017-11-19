@@ -82,3 +82,20 @@ module type S = sig open struct type t = int end val x : t end;;
 [%%expect{|
 module type S = sig val x : int end
 |}];;
+
+module type S = sig
+  open struct type t = int end
+  type s = t
+end
+[%%expect{|
+module type S = sig type s = int end
+|}]
+
+module type T = sig type s = int end
+module F(X:S) : T = X
+module G(X:T) : S = X
+[%%expect{|
+module type T = sig type s = int end
+module F : functor (X : S) -> T
+module G : functor (X : T) -> S
+|}]
