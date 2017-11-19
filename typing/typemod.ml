@@ -773,7 +773,9 @@ and transl_signature env sg =
             final_env
         | Psig_open sod -> begin
             let (newenv, od) = type_open env sod true in
-            let (trem, rem, final_env) = transl_sig newenv srem in begin
+            let (trem, rem, final_env) = transl_sig newenv srem in
+            let remr = ref rem in
+            begin
             if !open_struct_level = 0 then
               begin
               match extract_open od true with
@@ -781,7 +783,7 @@ and transl_signature env sg =
               | Some (_, _, id, _) -> begin
                   let s_rem = Mty_signature rem in begin
                   match Mtype.nondep_supertype newenv id s_rem with
-                  | Mty_signature _ -> ()
+                  | Mty_signature rem' -> remr := rem'
                   | exception Not_found ->
                       raise(Error(sod.popen_loc, env,
                                   Cannot_eliminate_anon_module(id, rem)))
@@ -791,7 +793,7 @@ and transl_signature env sg =
               end else ()
             end;
             mksig (Tsig_open od) env loc :: trem,
-            rem, final_env
+            !remr, final_env
           end
         | Psig_include sincl ->
             let smty = sincl.pincl_mod in
