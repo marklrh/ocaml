@@ -893,17 +893,6 @@ and transl_modtype_decl names env
      mtd_loc=pmtd_loc;
     }
   in
-  let newenv =
-    match tmty with
-    | Some {mty_desc=Tmty_signature _} -> begin
-        let newenv =
-          List.fold_left (fun env (id, decl, _) ->
-              Env.enter_module_declaration id decl env)
-            newenv (List.rev !generated_module_ident_in_sig) in
-        generated_module_ident_in_sig := [];
-        newenv
-      end
-    | _ -> newenv in
   newenv, mtd, Sig_modtype(id, decl)
 
 and transl_recmodule_modtypes env sdecls =
