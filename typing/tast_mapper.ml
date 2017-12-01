@@ -125,7 +125,8 @@ let structure_item sub {str_desc; str_loc; str_env} =
           (List.map (tuple3 id id (sub.class_type_declaration sub)) list)
     | Tstr_include incl ->
         Tstr_include (include_infos (sub.module_expr sub) incl)
-    | Tstr_open _
+    | Tstr_open od ->
+        Tstr_open {od with open_expr = sub.module_expr sub od.open_expr}
     | Tstr_attribute _ as d -> d
   in
   {str_desc; str_env; str_loc}
@@ -187,7 +188,7 @@ let pat sub x =
   let extra = function
     | Tpat_type _
     | Tpat_unpack as d -> d
-    | Tpat_open (path,loc,env) ->  Tpat_open (path, loc, sub.env sub env)
+    | Tpat_open (loc,env) ->  Tpat_open (loc, sub.env sub env)
     | Tpat_constraint ct -> Tpat_constraint (sub.typ sub ct)
   in
   let pat_env = sub.env sub x.pat_env in
@@ -217,8 +218,8 @@ let expr sub x =
         Texp_constraint (sub.typ sub cty)
     | Texp_coerce (cty1, cty2) ->
         Texp_coerce (opt (sub.typ sub) cty1, sub.typ sub cty2)
-    | Texp_open (ovf, path, loc, env) ->
-        Texp_open (ovf, path, loc, sub.env sub env)
+    | Texp_open (ovf, loc, env) ->
+        Texp_open (ovf, loc, sub.env sub env)
     | Texp_newtype _ as d -> d
     | Texp_poly cto -> Texp_poly (opt (sub.typ sub) cto)
   in
@@ -388,7 +389,8 @@ let signature_item sub x =
     | Tsig_class_type list ->
         Tsig_class_type
           (List.map (sub.class_type_declaration sub) list)
-    | Tsig_open _
+    | Tsig_open od ->
+        Tsig_open {od with open_expr = sub.module_expr sub od.open_expr}
     | Tsig_attribute _ as d -> d
   in
   {x with sig_desc; sig_env}
@@ -522,8 +524,8 @@ let class_expr sub x =
         )
     | Tcl_ident (path, lid, tyl) ->
         Tcl_ident (path, lid, List.map (sub.typ sub) tyl)
-    | Tcl_open (ovf, p, lid, env, e) ->
-        Tcl_open (ovf, p, lid, sub.env sub env, sub.class_expr sub e)
+    | Tcl_open (ovf, lid, env, e) ->
+        Tcl_open (ovf, lid, sub.env sub env, sub.class_expr sub e)
   in
   {x with cl_desc; cl_env}
 
@@ -544,8 +546,8 @@ let class_type sub x =
            sub.typ sub ct,
            sub.class_type sub cl
           )
-    | Tcty_open (ovf, p, lid, env, e) ->
-        Tcty_open (ovf, p, lid, sub.env sub env, sub.class_type sub e)
+    | Tcty_open (ovf, lid, env, e) ->
+        Tcty_open (ovf, lid, sub.env sub env, sub.class_type sub e)
   in
   {x with cltyp_desc; cltyp_env}
 

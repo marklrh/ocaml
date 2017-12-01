@@ -95,7 +95,7 @@ let type_module =
 
 let type_open :
   (?used_slot:bool ref -> override_flag -> Env.t -> Location.t ->
-   Longident.t loc -> Path.t * Env.t)
+   Parsetree.module_expr -> Typedtree.module_expr * Env.t)
     ref =
   ref (fun ?used_slot:_ _ -> assert false)
 
@@ -1397,12 +1397,13 @@ and type_pat_aux ~constrs ~labels ~no_existentials ~mode ~explode ~env
       k { p with pat_extra =
         (Tpat_type (path, lid), loc, sp.ppat_attributes) :: p.pat_extra }
   | Ppat_open (lid,p) ->
-      let path, new_env =
-        !type_open Asttypes.Fresh !env sp.ppat_loc lid in
+      let me = {pmod_desc=Pmod_ident lid; pmod_loc=lid.loc; pmod_attributes=[]} in
+      let _tme, new_env =
+        !type_open Asttypes.Fresh !env sp.ppat_loc me in
       let new_env = ref new_env in
       type_pat ~env:new_env p expected_ty ( fun p ->
         env := Env.copy_local !env ~from:!new_env;
-        k { p with pat_extra =( Tpat_open (path,lid,!new_env),
+        k { p with pat_extra =( Tpat_open (lid,!new_env),
                             loc, sp.ppat_attributes) :: p.pat_extra }
       )
   | Ppat_exception _ ->
@@ -2220,7 +2221,7 @@ struct
           Use.(inspect (join ty (class_expr env ce)))
       | Tcl_constraint (ce, _, _, _, _) ->
           class_expr env ce
-      | Tcl_open (_, _, _, _, ce) ->
+      | Tcl_open (_, _, _, ce) ->
           class_expr env ce
   and case : Env.env -> Typedtree.case -> scrutinee:Use.t -> Use.t =
     fun env { Typedtree.c_lhs; c_guard; c_rhs } ~scrutinee:ty ->
@@ -2320,7 +2321,7 @@ struct
             Use.join ty (class_expr env ce)
         | Tcl_constraint (ce, _, _, _, _) ->
             class_expr env ce
-        | Tcl_open (_, _, _, _, ce) ->
+        | Tcl_open (_, _, _, ce) ->
             class_expr env ce
     in
     match Use.unguarded (class_expr (build_unguarded_env idlist) ce) with
@@ -2541,7 +2542,9 @@ let contains_gadt env p =
         with Not_found -> ()
         end; iter_ppat (loop env) p
       | Ppat_open (lid,sub_p) ->
-        let _, new_env = !type_open Asttypes.Override env p.ppat_loc lid in
+        let me = {pmod_desc=Pmod_ident lid; pmod_loc=lid.loc;
+                  pmod_attributes=[]} in
+        let _, new_env = !type_open Asttypes.Override env p.ppat_loc me in
         loop new_env sub_p
     | _ -> iter_ppat (loop env) p
   in
@@ -3665,10 +3668,12 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_open (ovf, lid, e) ->
-      let (path, newenv) = !type_open ovf env sexp.pexp_loc lid in
+      let me = {pmod_desc=Pmod_ident lid; pmod_loc=lid.loc;
+                pmod_attributes=[]} in
+      let (_tme, newenv) = !type_open ovf env sexp.pexp_loc me in
       let exp = type_expect newenv e ty_expected in
       { exp with
-        exp_extra = (Texp_open (ovf, path, lid, newenv), loc,
+        exp_extra = (Texp_open (ovf, lid, newenv), loc,
                      sexp.pexp_attributes) ::
                       exp.exp_extra;
       }

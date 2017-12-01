@@ -136,7 +136,7 @@ let open_description sub od =
   let attrs = sub.attributes sub od.open_attributes in
   Opn.mk ~loc ~attrs
     ~override:od.open_override
-    (map_loc sub od.open_txt)
+    (sub.module_expr sub od.open_expr)
 
 let structure_item sub item =
   let loc = sub.location sub item.str_loc in
@@ -329,7 +329,7 @@ let exp_extra sub (extra, loc, attrs) sexp =
                      sub.typ sub cty2)
     | Texp_constraint cty ->
         Pexp_constraint (sexp, sub.typ sub cty)
-    | Texp_open (ovf, _path, lid, _) ->
+    | Texp_open (ovf, lid, _) ->
         Pexp_open (ovf, map_loc sub lid, sexp)
     | Texp_poly cto -> Pexp_poly (sexp, map_opt (sub.typ sub) cto)
     | Texp_newtype s -> Pexp_newtype (mkloc s loc, sexp)
@@ -634,7 +634,7 @@ let class_expr sub cexpr =
     | Tcl_constraint (cl, Some clty, _vals, _meths, _concrs) ->
         Pcl_constraint (sub.class_expr sub cl,  sub.class_type sub clty)
 
-    | Tcl_open (ovf, _p, lid, _env, e) ->
+    | Tcl_open (ovf, lid, _env, e) ->
         Pcl_open (ovf, lid, sub.class_expr sub e)
 
     | Tcl_ident _ -> assert false
@@ -651,7 +651,7 @@ let class_type sub ct =
         Pcty_constr (map_loc sub lid, List.map (sub.typ sub) list)
     | Tcty_arrow (label, ct, cl) ->
         Pcty_arrow (label, sub.typ sub ct, sub.class_type sub cl)
-    | Tcty_open (ovf, _p, lid, _env, e) ->
+    | Tcty_open (ovf, lid, _env, e) ->
         Pcty_open (ovf, lid, sub.class_type sub e)
   in
   Cty.mk ~loc ~attrs desc
